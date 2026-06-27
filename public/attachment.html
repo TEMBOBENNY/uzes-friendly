@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attachment Letter Request — UZES</title>
+  <link rel="stylesheet" href="css/styles.css?v=7">
+  <style>
+    .att-state { max-width: 520px; margin: 60px auto; padding: 40px 32px; text-align: center;
+      background: var(--card); border-radius: var(--radius); border: 1px solid var(--line);
+      box-shadow: var(--shadow); }
+    .att-state-icon { margin-bottom: 16px; color: var(--green); display: flex; justify-content: center; }
+    .att-state h2 { font-size: 20px; margin-bottom: 8px; }
+    .att-state p  { color: var(--muted); font-size: 14px; margin-bottom: 6px; line-height: 1.6; }
+    .att-contact { display: flex; flex-direction: column; gap: 6px; margin: 16px 0; font-size: 14px; }
+    .att-contact span { display: flex; align-items: center; gap: 8px; justify-content: center; }
+    .att-contact strong { color: var(--text); }
+
+    .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+    .form-grid-2 .full { grid-column: 1 / -1; }
+    @media (max-width: 600px) { .form-grid-2 { grid-template-columns: 1fr; } .form-grid-2 .full { grid-column: 1; } }
+
+    .req-section { font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .5px; color: var(--muted); margin: 20px 0 10px; }
+    .readonly-field { background: #f5f7fa; color: var(--muted); cursor: default; }
+
+    .success-card { max-width: 500px; margin: 60px auto; text-align: center;
+      background: var(--card); border-radius: var(--radius); padding: 40px 32px;
+      border: 1px solid #b8dfc9; box-shadow: var(--shadow); }
+    .success-icon { color: var(--ok); display: flex; justify-content: center; margin-bottom: 14px; }
+    .ok-msg { color: var(--ok); font-size: 13px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <!-- Sub-hero: ghost layout shows immediately; initSubHero replaces content after auth -->
+  <div id="subHero" class="sub-hero" style="min-height:52px">
+    <div class="sh-bar">
+      <a href="index.html" class="sh-brand">
+        <img src="img/uzes-logo.png" class="sh-logo" alt="UZES">
+      </a>
+      <nav class="sh-tabs" style="gap:4px">
+        <span style="width:80px;height:26px;border-radius:8px;background:rgba(255,255,255,.13);flex-shrink:0"></span>
+        <span style="width:82px;height:26px;border-radius:8px;background:rgba(255,255,255,.13);flex-shrink:0"></span>
+        <span style="width:66px;height:26px;border-radius:8px;background:rgba(255,255,255,.13);flex-shrink:0"></span>
+        <span style="width:66px;height:26px;border-radius:8px;background:rgba(255,255,255,.13);flex-shrink:0"></span>
+        <span style="width:128px;height:26px;border-radius:8px;background:rgba(255,255,255,.28);flex-shrink:0"></span>
+      </nav>
+      <span style="width:70px;height:28px;border-radius:7px;background:rgba(255,255,255,.13);flex-shrink:0"></span>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div id="attLoading" class="page" style="padding:24px 20px">
+    <div style="max-width:520px;margin:30px auto;padding:40px 32px;background:var(--card);border-radius:var(--radius);border:1px solid var(--line);box-shadow:var(--shadow)">
+      <div class="sk sk-card" style="width:64px;height:64px;border-radius:50%;margin:0 auto 20px"></div>
+      <div class="sk sk-title" style="width:50%;margin:0 auto 14px"></div>
+      <div class="sk sk-line sk-w90" style="margin:0 auto 8px"></div>
+      <div class="sk sk-line sk-w60" style="margin:0 auto 8px"></div>
+      <div class="sk sk-line sk-w40" style="margin:0 auto 20px"></div>
+      <div class="sk sk-card" style="height:44px;max-width:200px;margin:0 auto;border-radius:8px"></div>
+    </div>
+  </div>
+
+  <!-- Gate: not paid up -->
+  <div id="attGateUnpaid" style="display:none;padding:20px">
+    <div class="att-state">
+      <div class="att-state-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" width="52" height="52"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <h2>Members only</h2>
+      <p>The Attachment Letter Request is available to paid-up UZES members. Pay your Membership Dues first, then return here once an executive confirms your payment.</p>
+      <a href="student.html?tab=submit" class="btn-primary" style="display:inline-block;text-decoration:none;width:auto;padding:11px 28px;margin-top:8px">Pay Membership Dues →</a>
+    </div>
+  </div>
+
+  <!-- Gate: session closed -->
+  <div id="attSessionClosed" style="display:none;padding:20px">
+    <div class="att-state">
+      <div class="att-state-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" width="52" height="52"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <h2>Session closed</h2>
+      <p>The Industrial Training Secretary has closed the attachment letter request window. Please contact them directly:</p>
+      <div class="att-contact">
+        <span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><strong id="closedSecName">Industrial Training Secretary</strong></span>
+        <span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><a id="closedSecEmail" href="mailto:"></a></span>
+        <span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 16z"/></svg><span id="closedSecPhone"></span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gate: request pending -->
+  <div id="attPending" style="display:none;padding:20px">
+    <div class="att-state">
+      <div class="att-state-icon" style="color:#e67e22">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" width="52" height="52"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <h2>Request under review</h2>
+      <p>Your attachment letter request has been submitted and is awaiting approval from the Industrial Training Secretary. You will receive your letter by email once it is approved.</p>
+    </div>
+  </div>
+
+  <!-- Gate: request approved -->
+  <div id="attApproved" style="display:none;padding:20px">
+    <div class="att-state" style="border-color:#b8dfc9">
+      <div class="att-state-icon" style="color:var(--ok)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" width="52" height="52"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      </div>
+      <h2>Letter approved &amp; sent</h2>
+      <p>Your attachment letter has been approved and emailed to you. Check your inbox (and spam folder). Contact the Industrial Training Secretary if you did not receive it.</p>
+    </div>
+  </div>
+
+  <!-- Request form -->
+  <main id="attFormSection" class="page" style="display:none">
+    <h1>Industrial Attachment Letter Request</h1>
+    <p class="muted">Fill in the form below. Your details will be used to generate your official attachment letter.</p>
+
+    <div class="card">
+      <form id="attForm" autocomplete="off" novalidate>
+        <p class="req-section">Your details <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">(pre-filled from profile — edit if incorrect)</span></p>
+        <div class="form-grid-2">
+          <div>
+            <label for="af-name">Full name <span class="muted small">*</span></label>
+            <input id="af-name" required placeholder="Your full name">
+          </div>
+          <div>
+            <label for="af-comp">Computer / Registration # <span class="muted small">*</span></label>
+            <input id="af-comp" required placeholder="e.g. 2021001234">
+          </div>
+          <div>
+            <label for="af-dept">Department <span class="muted small">*</span></label>
+            <input id="af-dept" required placeholder="e.g. Electrical Engineering">
+          </div>
+          <div>
+            <label for="af-year">Year of study <span class="muted small">*</span></label>
+            <input id="af-year" required placeholder="e.g. 3rd Year">
+          </div>
+          <div class="full">
+            <label for="af-email">Email address</label>
+            <input id="af-email" type="email" class="readonly-field" readonly>
+          </div>
+        </div>
+
+        <p class="req-section">Additional info</p>
+        <div class="form-grid-2">
+          <div class="full">
+            <label for="af-phone">Phone number <span class="muted small">*</span></label>
+            <input id="af-phone" type="tel" required placeholder="e.g. 0971234567" style="max-width:280px">
+          </div>
+        </div>
+
+        <!-- Custom placeholder fields from secretary -->
+        <div id="af-custom-fields"></div>
+
+        <div style="margin-top:20px">
+          <p id="attErr" class="error"></p>
+          <p id="attOk" class="ok-msg"></p>
+          <button type="submit" id="attSubmitBtn" class="btn-primary" style="width:auto;padding:11px 28px">Submit request</button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <!-- Success -->
+  <div id="attSuccess" style="display:none;padding:20px">
+    <div class="success-card">
+      <div class="success-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="52" height="52"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      </div>
+      <h2 style="margin-bottom:8px">Request submitted!</h2>
+      <p class="muted" style="font-size:14px">Your attachment letter request has been sent to the Industrial Training Secretary. You will receive your letter by email once it is approved.</p>
+      <a href="student.html" class="btn-primary" style="display:inline-block;text-decoration:none;width:auto;padding:11px 28px;margin-top:16px">Back to dashboard</a>
+    </div>
+  </div>
+
+  <footer class="pub-footer">
+    <div class="footer-inner">
+      <p class="footer-tagline">The University of Zambia Engineering Society · School of Engineering</p>
+      <p class="footer-copy">&copy; <span id="footerYear"></span> UZES · <a href="mailto:uzesofficial@gmail.com">uzesofficial@gmail.com</a></p>
+    </div>
+  </footer>
+  <script>document.getElementById("footerYear").textContent = new Date().getFullYear();</script>
+
+  <script type="module" src="js/attachment.js"></script>
+  <script src="js/chrome.js"></script>
+</body>
+</html>

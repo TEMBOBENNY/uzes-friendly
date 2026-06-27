@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About — UZES</title>
+  <link rel="icon" type="image/png" href="img/uzes-logo.png">
+  <link rel="stylesheet" href="css/styles.css?v=7">
+</head>
+<body>
+
+  <nav class="pub-nav">
+    <div class="pub-nav-inner">
+      <a href="index.html" class="pub-nav-brand">
+        <span class="logo-chip nav"><img src="img/uzes-logo.png" alt="UZES"></span>
+        <span class="pub-nav-name">The University of Zambia Engineering Society</span>
+      </a>
+      <div class="pub-nav-links" id="navLinks">
+        <a href="index.html">Home</a>
+        <a href="about.html" class="active">About</a>
+        <a href="activities.html">Activities</a>
+        <a href="faq.html">FAQ</a>
+        <a href="contact.html">Contact</a>
+        <a href="support.html">Support</a>
+      </div>
+      <div class="pub-nav-end">
+        <button type="button" class="theme-toggle-btn theme-toggle-nav" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+        <a href="login.html" class="pub-nav-signin">Sign in</a>
+        <button class="pub-nav-toggle" id="navToggle" aria-label="Open menu">&#9776;</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="pub-hero-sm">
+    <h1>About UZES</h1>
+    <p>The University of Zambia Engineering Society — est. 1969</p>
+  </div>
+
+  <main class="pub-main">
+
+    <!-- Mission -->
+    <section class="editor-section" style="margin-bottom:48px">
+      <h2 class="section-h2">Our Mission</h2>
+      <div id="missionText" style="color:var(--muted);line-height:1.75;font-size:15px;max-width:720px">
+        <span class="sk sk-line sk-w90" style="margin-bottom:10px"></span>
+        <span class="sk sk-line sk-w75" style="margin-bottom:10px"></span>
+        <span class="sk sk-line sk-w90" style="margin-bottom:10px"></span>
+        <span class="sk sk-line sk-w60"></span>
+      </div>
+    </section>
+
+    <!-- Org chart -->
+    <section style="margin-bottom:56px">
+      <h2 class="section-h2" style="margin-bottom:4px">Our Leadership</h2>
+      <p class="section-sub">The UZES Executive Committee</p>
+      <div id="orgChart" style="margin-top:20px">
+        <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+          <span class="sk sk-card" style="width:130px;height:130px;border-radius:12px"></span>
+          <span class="sk sk-card" style="width:130px;height:130px;border-radius:12px"></span>
+          <span class="sk sk-card" style="width:130px;height:130px;border-radius:12px"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Affiliations -->
+    <section style="margin-bottom:48px">
+      <h2 class="section-h2" style="margin-bottom:16px">Our Affiliations</h2>
+      <ul class="affiliations-list" id="affiliationsList">
+        <li><span class="aff-dot"></span>Dean-School of Engineering, UNZA</li>
+        <li><span class="aff-dot"></span>Dean of Students Affairs, UNZA</li>
+        <li><span class="aff-dot"></span>University of Zambia Student Union (UNZASU)</li>
+        <li><span class="aff-dot"></span>Engineering Institution of Zambia (EIZ)</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <!-- Profile dialog -->
+  <dialog id="profileDialog" class="profile-dialog">
+    <div class="dialog-inner" style="position:relative">
+      <button class="dialog-close" id="dialogClose">&#x2715;</button>
+      <div id="dialogBody"></div>
+    </div>
+  </dialog>
+
+  <footer class="pub-footer">
+    <div class="footer-inner">
+      <p class="footer-tagline">The University of Zambia Engineering Society · School of Engineering</p>
+      <p class="footer-copy">
+        &copy; <span id="footerYear"></span> UZES ·
+        <a href="mailto:uzesofficial@gmail.com">uzesofficial@gmail.com</a>
+      </p>
+    </div>
+  </footer>
+
+  <script type="module" src="js/about.js"></script>
+  <script>
+    document.getElementById("footerYear").textContent = new Date().getFullYear();
+    document.getElementById("navToggle").addEventListener("click", () => {
+      document.getElementById("navLinks").classList.toggle("open");
+    });
+    document.getElementById("dialogClose").addEventListener("click", () => {
+      document.getElementById("profileDialog").close();
+    });
+  </script>
+  <script src="js/chrome.js"></script>
+</body>
+</html>

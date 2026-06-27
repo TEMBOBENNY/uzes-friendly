@@ -1,0 +1,11 @@
+/build/*
+!/build/.npmkeep
+
+node_modules/
+android/.gradle/
+android/app/build/
+android/app/src/main/assets/
+android/local.properties
+.capacitor/
+.DS_Store
+*.log

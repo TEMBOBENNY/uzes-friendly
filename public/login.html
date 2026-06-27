@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UZES — Sign in</title>
+  <link rel="icon" type="image/png" href="img/uzes-logo.png">
+  <link rel="stylesheet" href="css/styles.css?v=7">
+</head>
+<body class="auth-bg">
+  <main class="auth-card">
+    <div class="brand">
+      <img src="img/uzes-logo.png" class="login-logo" alt="UZES">
+      <h1>Member Portal</h1>
+      <p class="muted">The University of Zambia Engineering Society</p>
+    </div>
+
+    <form id="loginForm" autocomplete="on">
+      <label for="email">Email or computer number</label>
+      <input id="email" name="email" type="text" required
+        placeholder="you@example.com or 2020998822" autocomplete="username">
+
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" required placeholder="••••••••">
+
+      <p id="error" class="error" role="alert"></p>
+
+      <button id="submitBtn" type="submit" class="btn-primary">Sign in</button>
+    </form>
+
+    <p class="muted small" style="text-align:center;margin-top:14px">
+      New student? <a href="register.html">Create an account</a>
+    </p>
+    <p class="muted small" style="text-align:center;margin-top:8px">
+      <a href="#" id="forgotPwLink">Forgot password?</a>
+    </p>
+    <p class="muted small" style="text-align:center;margin-top:8px">
+      <a href="index.html">← Back to UZES website</a>
+    </p>
+  </main>
+
+  <!-- Forgot password modal -->
+  <div id="forgotPwModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:16px">
+    <div style="background:var(--card);border-radius:12px;padding:26px 26px 22px;max-width:360px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.25);border:1px solid var(--line)">
+      <p style="font-size:16px;font-weight:700;margin:0 0 5px;color:var(--text)">Reset password</p>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 16px">Enter your email address and we'll send you a reset link.</p>
+      <input id="forgotPwEmail" type="email" placeholder="you@example.com" required
+        style="width:100%;padding:10px 12px;font-size:14px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;background:var(--bg);color:var(--text)">
+      <p id="forgotPwErr" style="color:var(--danger);font-size:12px;min-height:16px;margin:0 0 10px"></p>
+      <div style="display:flex;gap:10px">
+        <button id="forgotPwSubmit" style="background:var(--green);color:#fff;border:none;padding:10px 22px;border-radius:8px;font-weight:700;cursor:pointer;flex:1">Send reset link</button>
+        <button id="forgotPwCancel" style="background:none;border:1px solid var(--line);padding:10px 18px;border-radius:8px;cursor:pointer;color:var(--text)">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/chrome.js"></script>
+  <script type="module" src="js/login.js"></script>
+</body>
+</html>

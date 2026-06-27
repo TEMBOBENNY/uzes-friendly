@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UZES Payments — Executive</title>
+  <link rel="stylesheet" href="css/styles.css?v=7">
+  <style>
+    .tabs { display: flex; gap: 6px; margin: 16px 0 0; border-bottom: 2px solid var(--line); }
+    .tab-btn {
+      padding: 9px 18px; border: none; background: none; cursor: pointer;
+      font-size: 14px; font-weight: 600; color: var(--muted);
+      border-bottom: 3px solid transparent; margin-bottom: -2px;
+    }
+    .tab-btn.active { color: var(--green); border-bottom-color: var(--green); }
+    .tab-panel.hidden { display: none; }
+
+    .pay-card {
+      border: 1px solid var(--line); border-radius: 10px;
+      padding: 16px; margin-bottom: 12px; background: #fff;
+    }
+    .pay-card-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 10px; flex-wrap: wrap; gap: 6px;
+    }
+    .student-name { font-weight: 700; font-size: 15px; }
+    .pay-card-body { display: flex; flex-direction: column; gap: 5px; font-size: 13px; }
+    .pay-detail { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+    .detail-label {
+      font-weight: 600; color: var(--muted); min-width: 110px;
+      flex-shrink: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .4px;
+    }
+    .proof-link { color: var(--green); text-decoration: none; font-weight: 600; }
+    .proof-link:hover { text-decoration: underline; }
+
+    .pay-card-actions {
+      margin-top: 14px; padding-top: 12px;
+      border-top: 1px solid var(--line);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    #action-btns-* { display: flex; gap: 8px; }
+    .btn-confirm {
+      background: var(--ok); color: #fff; border: none;
+      padding: 9px 20px; border-radius: 8px; font-weight: 700;
+      cursor: pointer; font-size: 14px;
+    }
+    .btn-confirm:hover { background: #16703e; }
+    .btn-confirm:disabled { opacity: .6; cursor: default; }
+    .btn-reject {
+      background: #fdf4f4; color: var(--danger);
+      border: 1px solid #f1c0bb; padding: 9px 20px;
+      border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 14px;
+    }
+    .btn-reject:hover { background: #fae8e8; }
+    .reject-wrap {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    }
+    .reject-input {
+      flex: 1; min-width: 200px; padding: 9px 12px;
+      border: 1px solid var(--danger); border-radius: 8px; font-size: 14px;
+    }
+    .btn-danger-sm {
+      background: var(--danger); color: #fff; border: none;
+      padding: 9px 16px; border-radius: 8px; font-weight: 700;
+      cursor: pointer; font-size: 13px; white-space: nowrap;
+    }
+    .btn-sm {
+      padding: 9px 14px; border: 1px solid var(--line);
+      background: #f5f7fa; border-radius: 8px; cursor: pointer; font-size: 13px;
+    }
+    .status-pill {
+      color: #fff; font-size: 10px; font-weight: 800;
+      padding: 3px 9px; border-radius: 20px; letter-spacing: .5px;
+    }
+    .badge {
+      font-size: 11px; font-weight: 700; padding: 2px 8px;
+      border-radius: 20px; letter-spacing: .3px;
+    }
+    .action-err { font-size: 12px; }
+    .section-head { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+
+    /* ── Reports ───────────────────────────────────────────────── */
+    .rpt-kpi-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 10px; margin-bottom: 14px;
+    }
+    .stat-card {
+      border-radius: var(--radius); padding: 16px 18px; color: #fff;
+      box-shadow: var(--shadow);
+    }
+    .stat-card.green  { background: var(--ok); }
+    .stat-card.blue   { background: #1a6fb5; }
+    .stat-card.orange { background: #d97706; }
+    .stat-card.red    { background: var(--danger); }
+    .stat-val   { font-size: 22px; font-weight: 800; }
+    .stat-label { font-size: 11px; opacity: .85; margin-top: 2px; }
+
+    .breakdown-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr));
+      gap: 12px; margin-bottom: 2px;
+    }
+    .breakdown-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px;
+    }
+    .breakdown-row:last-child { border-bottom: none; }
+    .breakdown-amt { font-weight: 700; }
+
+    .filter-sel {
+      padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+      font-size: 13px; background: #fff; color: var(--text);
+    }
+    .rpt-filters {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    }
+    .rpt-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .rpt-table th {
+      text-align: left; padding: 8px 10px;
+      border-bottom: 2px solid var(--line);
+      font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
+      color: var(--muted); font-weight: 700; white-space: nowrap;
+    }
+    .rpt-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+    .rpt-table tbody tr:last-child td { border-bottom: none; }
+    .rpt-table tbody tr:hover { background: #f8fafc; }
+    .period-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+    .period-btn {
+      padding: 5px 13px; border: 1px solid var(--line); background: #f5f7fa;
+      border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--muted);
+    }
+    .period-btn.active { background: var(--green); color: #fff; border-color: var(--green); }
+    .period-btn:hover:not(.active) { background: #e8ecf1; }
+
+    /* ── Finances ──────────────────────────────────────────────── */
+    .fin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+    @media (max-width: 640px) {
+      .rpt-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .fin-grid { grid-template-columns: 1fr; }
+      .detail-label { min-width: 80px; }
+      .reject-input { min-width: 0; width: 100%; }
+      .sig-box { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .btn-confirm, .btn-reject { flex: 1; }
+      .stat-val { font-size: 18px; }
+      .rpt-filters { flex-direction: column; align-items: stretch; }
+      .rpt-filters .filter-sel { width: 100%; box-sizing: border-box; }
+      .rpt-filters #exportBtn { width: 100%; box-sizing: border-box; }
+    }
+    .fin-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .fin-row:last-child { border-bottom: none; }
+    .fin-row-main { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+    .fin-source { font-weight: 600; font-size: 14px; }
+    .fin-row-detail { font-size: 12.5px; color: var(--muted); }
+    .fin-row-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .approval-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+    .approval-chip { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
+    .approval-chip.approved { background: #e8f5ee; color: var(--ok); border: 1px solid #b8dfc9; }
+    .approval-chip.rejected { background: #fdf4f4; color: var(--danger); border: 1px solid #f1c0bb; }
+    .fin-form-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+
+    /* Signature upload */
+    .sig-box {
+      border: 2px dashed var(--line); border-radius: 10px; padding: 16px;
+      display: flex; align-items: center; gap: 16px; cursor: pointer;
+      background: #f8fafc; margin-top: 8px;
+    }
+    .sig-box:hover { border-color: var(--green); }
+    .sig-preview { max-height: 60px; max-width: 180px; object-fit: contain; display: none; }
+    .sig-placeholder { color: var(--muted); font-size: 13px; }
+    .ok-msg { color: var(--ok); font-size: 13px; font-weight: 600; }
+    .lib-mod-tab { padding:7px 16px; font-size:13px; }
+    .lib-mod-tab.active-mod-tab { background: var(--green); color: #fff; border-color: var(--green); }
+  </style>
+</head>
+<body>
+  <!-- Sub-hero (new header with logo + tabs + user + sign out) injected by subhero.js -->
+
+  <main class="page">
+
+    <!-- ── Pending tab ────────────────────────────────────────────── -->
+    <div id="tab-pending" class="tab-panel" style="margin-top:16px">
+      <div id="pendingList">
+        <div class="sk sk-card" style="height:140px;margin-bottom:12px"></div>
+        <div class="sk sk-card" style="height:140px;margin-bottom:12px"></div>
+      </div>
+    </div>
+
+    <!-- ── All payments tab ───────────────────────────────────────── -->
+    <div id="tab-all" class="tab-panel hidden" style="margin-top:16px">
+      <div id="allList">
+        <div class="sk sk-card" style="height:110px;margin-bottom:12px"></div>
+        <div class="sk sk-card" style="height:110px;margin-bottom:12px"></div>
+        <div class="sk sk-card" style="height:110px"></div>
+      </div>
+    </div>
+
+    <!-- ── Finances tab ─────────────────────────────────────────── -->
+    <div id="tab-finances" class="tab-panel hidden" style="margin-top:16px">
+
+      <!-- Other income (Treasurer / Admin only — hidden for others via JS) -->
+      <div class="card" id="addIncomeCard">
+        <p class="section-head">Record other income</p>
+        <p class="muted small" style="margin-bottom:12px">Donations, sales proceeds, collaboration income, etc.</p>
+        <form id="incomeForm" class="fin-grid">
+          <div>
+            <label for="incomeSource">Source / Description</label>
+            <input id="incomeSource" required placeholder="e.g. Alumni donation">
+          </div>
+          <div>
+            <label for="incomeCategory">Category</label>
+            <select id="incomeCategory">
+              <option value="Donation">Donation</option>
+              <option value="Sales">Sales</option>
+              <option value="Collaboration">Collaboration</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label for="incomeAmount">Amount (K)</label>
+            <input id="incomeAmount" type="number" min="0.01" step="0.01" required placeholder="0.00">
+          </div>
+          <div>
+            <label for="incomeDate">Date received</label>
+            <input id="incomeDate" type="date" required>
+          </div>
+          <div style="grid-column:1/-1">
+            <label for="incomeNotes">Notes (optional)</label>
+            <textarea id="incomeNotes" rows="2" placeholder="Additional details…" style="resize:vertical"></textarea>
+          </div>
+          <div style="grid-column:1/-1" class="fin-form-actions">
+            <button id="incomeBtn" type="submit" class="btn-primary" style="width:auto;padding:10px 22px;margin:0">
+              Add income record
+            </button>
+            <p id="incomeErr" class="error" style="margin:0"></p>
+          </div>
+        </form>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <p class="section-head">Other income records</p>
+        <div id="incomeList">
+          <div class="sk-row"><span class="sk sk-line sk-w60" style="margin-bottom:0;flex:1"></span><span class="sk sk-line sk-w40" style="width:80px;margin-bottom:0"></span></div>
+          <div class="sk-row"><span class="sk sk-line sk-w75" style="margin-bottom:0;flex:1"></span><span class="sk sk-line sk-w40" style="width:80px;margin-bottom:0"></span></div>
+        </div>
+      </div>
+
+      <!-- Expense requests (Treasurer creates; Chair/Vice Chair approves) -->
+      <div class="card" id="addExpenseCard" style="margin-top:14px">
+        <p class="section-head">Request expense</p>
+        <p class="muted small" style="margin-bottom:12px">
+          Requires approval from both the Chairperson and Vice Chairperson before the deduction is recorded.
+        </p>
+        <form id="expenseForm" class="fin-grid">
+          <div>
+            <label for="expensePurpose">Purpose</label>
+            <input id="expensePurpose" required placeholder="e.g. Printing event flyers">
+          </div>
+          <div>
+            <label for="expenseAmount">Amount (K)</label>
+            <input id="expenseAmount" type="number" min="0.01" step="0.01" required placeholder="0.00">
+          </div>
+          <div style="grid-column:1/-1">
+            <label for="expenseNotes">Notes (optional)</label>
+            <textarea id="expenseNotes" rows="2" placeholder="Describe the expense in more detail…" style="resize:vertical"></textarea>
+          </div>
+          <div style="grid-column:1/-1" class="fin-form-actions">
+            <button id="expenseBtn" type="submit" class="btn-primary" style="width:auto;padding:10px 22px;margin:0">
+              Submit expense request
+            </button>
+            <p id="expenseErr" class="error" style="margin:0"></p>
+          </div>
+        </form>
+      </div>
+
+      <!-- Pending approvals (Chairperson / Vice Chairperson / Admin only) -->
+      <div class="card" id="pendingExpensesCard" style="margin-top:14px">
+        <p class="section-head">Pending expense approvals</p>
+        <div id="pendingExpensesList">
+          <div class="sk sk-card" style="height:90px;margin-bottom:10px"></div>
+          <div class="sk sk-card" style="height:90px"></div>
+        </div>
+      </div>
+
+      <!-- All expense records (all executives, read-only) -->
+      <div class="card" style="margin-top:14px">
+        <p class="section-head">Expense records</p>
+        <div id="expenseList">
+          <div class="sk-row"><span class="sk sk-line sk-w75" style="margin-bottom:0;flex:1"></span><span class="sk sk-line" style="width:70px;margin-bottom:0"></span></div>
+          <div class="sk-row"><span class="sk sk-line sk-w60" style="margin-bottom:0;flex:1"></span><span class="sk sk-line" style="width:70px;margin-bottom:0"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Reports tab ──────────────────────────────────────────── -->
+    <div id="tab-reports" class="tab-panel hidden" style="margin-top:16px">
+      <div id="reportsContainer">
+        <div class="rpt-kpi-grid">
+          <div class="sk sk-card" style="height:72px"></div>
+          <div class="sk sk-card" style="height:72px"></div>
+          <div class="sk sk-card" style="height:72px"></div>
+          <div class="sk sk-card" style="height:72px"></div>
+        </div>
+        <div class="sk sk-card" style="height:160px;margin-top:0"></div>
+      </div>
+    </div>
+
+    <!-- ── Profile / Signature tab ───────────────────────────────── -->
+    <div id="tab-profile" class="tab-panel hidden" style="margin-top:16px">
+      <div class="card">
+        <p class="section-head">My signature</p>
+        <p class="muted" style="font-size:13px;margin-bottom:12px;">
+          This signature will appear on every receipt you confirm.
+          Upload a clear image on a white or transparent background.
+        </p>
+
+        <div class="sig-box" id="sigBox" onclick="document.getElementById('sigInput').click()">
+          <img id="sigPreview" class="sig-preview" alt="Current signature">
+          <span class="sig-placeholder" id="sigPlaceholder">Click to upload your signature (PNG/JPG)</span>
+        </div>
+        <input type="file" id="sigInput" accept="image/*" style="display:none">
+
+        <div style="margin-top:12px;display:flex;align-items:center;gap:12px">
+          <button id="saveSigBtn" class="btn-primary" style="width:auto;padding:9px 22px" disabled>
+            Save signature
+          </button>
+          <p id="sigErr" class="error"></p>
+          <p id="sigOk" class="ok-msg"></p>
+        </div>
+      </div>
+
+      <div class="card" style="max-width:480px;margin-top:14px">
+        <p class="section-head">Change password</p>
+        <form id="changePwForm" autocomplete="off">
+          <label for="cpCurrentPw">Current password</label>
+          <input id="cpCurrentPw" type="password" required placeholder="Your current password" style="margin-bottom:12px">
+          <label for="cpNewPw">New password</label>
+          <input id="cpNewPw" type="password" required placeholder="At least 6 characters" style="margin-bottom:12px">
+          <label for="cpConfirmPw">Confirm new password</label>
+          <input id="cpConfirmPw" type="password" required placeholder="Repeat new password" style="margin-bottom:14px">
+          <p id="cpErr" class="error"></p>
+          <p id="cpOk" class="ok-msg"></p>
+          <button type="submit" id="cpBtn" class="btn-primary" style="width:auto;padding:10px 26px">Change password</button>
+        </form>
+      </div>
+
+      <!-- 2FA card (filled + wired by subhero.js) -->
+      <div id="acc2faBox" style="margin-top:14px"></div>
+    </div>
+    <!-- ── Public Content tab (Info & Publicity / Admin only) ──────── -->
+    <div id="tab-content" class="tab-panel hidden" style="margin-top:16px"></div>
+
+    <!-- ── Activities tab (Info & Publicity, Social & Cultural, Admin) ─ -->
+    <div id="tab-activities" class="tab-panel hidden" style="margin-top:16px"></div>
+
+    <!-- ── Company Placements tab (Sec Gen, Vice Sec Gen, Admin) ──────── -->
+    <div id="tab-placements" class="tab-panel hidden" style="margin-top:16px">
+
+      <div class="card">
+        <p class="section-head">Company Vacancies</p>
+        <div id="sgVacancyList">
+          <div class="sk sk-card" style="height:120px;margin-bottom:10px"></div>
+          <div class="sk sk-card" style="height:120px"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <p class="section-head">Add Company Vacancy</p>
+        <p class="muted small" style="margin-bottom:14px">
+          Create a vacancy for a company. Use <strong>Assign Now</strong> on any vacancy to automatically match eligible paid students by department, province, gender, and year of study.
+        </p>
+        <form id="sgAddVacancyForm">
+          <div class="fin-grid">
+            <div>
+              <label for="sgVacCompany">Company name</label>
+              <input id="sgVacCompany" required placeholder="e.g. Zesco Limited">
+            </div>
+            <div>
+              <label for="sgVacType">Placement type</label>
+              <select id="sgVacType">
+                <option value="Attachment">Attachment (4th year &amp; below)</option>
+                <option value="Internship">Internship (5th year)</option>
+              </select>
+            </div>
+            <div>
+              <label for="sgVacProvince">Province</label>
+              <select id="sgVacProvince">
+                <option value="">— Select province —</option>
+                <option>Central</option><option>Copperbelt</option><option>Eastern</option>
+                <option>Luapula</option><option>Lusaka</option><option>Muchinga</option>
+                <option>Northern</option><option>North-Western</option><option>Southern</option>
+                <option>Western</option>
+              </select>
+            </div>
+            <div>
+              <label for="sgVacDistrict">District</label>
+              <input id="sgVacDistrict" required placeholder="e.g. Lusaka">
+            </div>
+            <div>
+              <label for="sgVacGender">Gender preference</label>
+              <select id="sgVacGender">
+                <option value="All">All (no preference)</option>
+                <option value="Male">Male only</option>
+                <option value="Female">Female only</option>
+              </select>
+            </div>
+            <div>
+              <label for="sgVacAcceptMode">Accept mode</label>
+              <select id="sgVacAcceptMode">
+                <option value="manual">Manual — student reviews &amp; accepts</option>
+                <option value="auto">Auto — confirm immediately on match</option>
+              </select>
+            </div>
+          </div>
+          <p style="font-size:13px;font-weight:600;margin:14px 0 8px">Slots per department</p>
+          <div id="sgDeptSlotsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;margin-bottom:16px"></div>
+          <div class="fin-form-actions">
+            <button id="sgAddVacancyBtn" type="submit" class="btn-primary" style="width:auto;padding:10px 22px;margin:0">Add vacancy</button>
+            <p id="sgAddVacancyErr" class="error" style="margin:0"></p>
+            <p id="sgAddVacancyMsg" class="ok-msg" style="margin:0"></p>
+          </div>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- ── Library Moderation tab (Sec Gen, Vice Sec Gen, Admin) ─────── -->
+    <div id="tab-library-mod" class="tab-panel hidden" style="margin-top:16px">
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+        <button id="lib-mod-tab-pending" class="btn-sm lib-mod-tab active-mod-tab" onclick="switchLibModTab('pending')">Pending review</button>
+        <button id="lib-mod-tab-flagged" class="btn-sm lib-mod-tab" onclick="switchLibModTab('flagged')">Flagged / Reported</button>
+        <button id="lib-mod-tab-bulk"    class="btn-sm lib-mod-tab" onclick="switchLibModTab('bulk')">Bulk Upload</button>
+        <button id="lib-mod-tab-courses" class="btn-sm lib-mod-tab" onclick="switchLibModTab('courses')">Manage Courses</button>
+      </div>
+      <div id="libModList">
+        <div class="sk sk-card" style="height:120px;margin-bottom:10px"></div>
+        <div class="sk sk-card" style="height:120px"></div>
+      </div>
+      <div id="libBulkUpload"   style="display:none"></div>
+      <div id="libCoursesPanel" style="display:none"></div>
+    </div>
+
+  </main>
+
+  <footer class="pub-footer">
+    <div class="footer-inner">
+      <p class="footer-tagline">The University of Zambia Engineering Society · School of Engineering</p>
+      <p class="footer-copy">&copy; <span id="footerYear"></span> UZES · <a href="mailto:uzesofficial@gmail.com">uzesofficial@gmail.com</a></p>
+    </div>
+  </footer>
+  <script>document.getElementById("footerYear").textContent = new Date().getFullYear();</script>
+
+  <!-- Verify Receipt FAB (role=executive only — hidden until JS confirms role) -->
+  <button id="verifyBtn" class="verify-fab" style="display:none" aria-label="Scan receipt QR code to verify">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+      <rect x="3" y="14" width="7" height="7" rx="1"/>
+      <path d="M14 14h3v3"/><path d="M17 20h3v-3"/><path d="M20 14v3"/>
+    </svg>
+    Verify Receipt
+  </button>
+
+  <!-- QR Scanner Modal -->
+  <div id="scannerModal" class="scanner-modal hidden" role="dialog" aria-modal="true" aria-label="Receipt QR Scanner">
+    <div class="scanner-box">
+      <div class="scanner-header">
+        <div>
+          <h2 style="font-size:17px;font-weight:700;margin:0">Verify Receipt</h2>
+          <p class="muted small" style="margin-top:3px">Point camera at the QR code on the bottom of the student's receipt</p>
+        </div>
+        <button id="closeScannerBtn" class="scanner-close" aria-label="Close scanner">&times;</button>
+      </div>
+      <div id="qr-reader" style="margin-top:14px;border-radius:10px;overflow:hidden;min-height:100px"></div>
+      <div id="scanResult" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- html5-qrcode — non-module CDN script; creates global window.Html5Qrcode -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script type="module" src="js/executive.js?v=13"></script>
+  <script src="js/chrome.js"></script>
+</body>
+</html>

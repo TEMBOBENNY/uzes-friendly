@@ -1,0 +1,35 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Proof-of-payment uploads. Any signed-in user may upload.
+    match /uzes-proofs/{allPaths=**} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null
+                      && request.resource.size < 10 * 1024 * 1024
+                      && request.resource.contentType.matches('image/.*|application/pdf');
+    }
+
+    // Executive profile photos — any signed-in user may upload; public read.
+    match /uzes-exec-photos/{allPaths=**} {
+      allow read:  if true;
+      allow write: if request.auth != null
+                      && request.resource.size < 10 * 1024 * 1024
+                      && request.resource.contentType.matches('image/.*');
+    }
+
+    // Activity posters — any signed-in user may upload; public read.
+    match /uzes-activity-posters/{allPaths=**} {
+      allow read:  if true;
+      allow write: if request.auth != null
+                      && request.resource.size < 10 * 1024 * 1024
+                      && request.resource.contentType.matches('image/.*|application/pdf');
+    }
+
+    // Executive signature images.
+    match /signatures/{uid}/{file} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null && request.resource.size < 2 * 1024 * 1024;
+    }
+  }
+}

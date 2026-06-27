@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UZES Payments — Student Registration</title>
+  <link rel="icon" type="image/png" href="img/uzes-logo.png">
+  <link rel="stylesheet" href="css/styles.css?v=7">
+  <style>
+    .reg-card {
+      background: var(--card);
+      width: 100%; max-width: 520px;
+      padding: 32px 28px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0 16px;
+    }
+    .form-grid .full { grid-column: 1 / -1; }
+    @media (max-width: 500px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-grid .full { grid-column: 1; }
+    }
+    .step-note {
+      font-size: 12px; color: var(--muted);
+      background: #f0f6f2; border-left: 3px solid var(--green);
+      padding: 8px 12px; border-radius: 6px;
+      margin-bottom: 18px; line-height: 1.5;
+    }
+    .back-link { display: block; text-align: center; margin-top: 16px; font-size: 13px; }
+  </style>
+</head>
+<body class="auth-bg">
+  <main class="reg-card">
+    <div class="brand" style="margin-bottom:16px">
+      <img src="img/uzes-logo.png" class="login-logo" alt="UZES">
+      <h1 style="font-size:20px;margin-top:10px">Student Registration</h1>
+      <p class="muted small">The University of Zambia Engineering Society</p>
+    </div>
+
+    <p class="step-note">
+      Fill in your details below to create your account. Use a password you'll remember —
+      you can change it any time after logging in.
+    </p>
+
+    <form id="regForm" class="form-grid" autocomplete="off">
+
+      <div class="full">
+        <label for="regName">Full name</label>
+        <input id="regName" name="regName" type="text" required placeholder="e.g. Chanda Mwale">
+      </div>
+
+      <div class="full">
+        <label for="regEmail">Email address</label>
+        <input id="regEmail" name="regEmail" type="email" required placeholder="you@example.com" autocomplete="username">
+      </div>
+
+      <div class="full">
+        <label for="regComp">Computer number</label>
+        <input id="regComp" name="regComp" type="text" required placeholder="e.g. 2020998822">
+      </div>
+
+      <div>
+        <label for="regGender">Gender</label>
+        <select id="regGender" name="regGender" required>
+          <option value="">— Select —</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="regYear">Year of study</label>
+        <select id="regYear" name="regYear" required>
+          <option value="">— Select —</option>
+          <option value="1st Year">1st Year</option>
+          <option value="2nd Year">2nd Year</option>
+          <option value="3rd Year">3rd Year</option>
+          <option value="4th Year">4th Year</option>
+          <option value="5th Year">5th Year</option>
+          <option value="Graduate">Graduate</option>
+        </select>
+      </div>
+
+      <div class="full">
+        <label for="regDept">Department</label>
+        <select id="regDept" name="regDept" required>
+          <option value="">— Select —</option>
+          <option value="Agricultural Engineering">Agricultural Engineering</option>
+          <option value="Civil and Environmental Engineering">Civil and Environmental Engineering</option>
+          <option value="Electrical and Electronic Engineering">Electrical and Electronic Engineering</option>
+          <option value="Geomatic Engineering">Geomatic Engineering</option>
+          <option value="Mechanical Engineering">Mechanical Engineering</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="regPw">Password</label>
+        <input id="regPw" name="regPw" type="password" required placeholder="At least 6 characters" autocomplete="new-password">
+      </div>
+
+      <div>
+        <label for="regPwConfirm">Confirm password</label>
+        <input id="regPwConfirm" name="regPwConfirm" type="password" required placeholder="Repeat password" autocomplete="new-password">
+      </div>
+
+      <div class="full" style="margin-top:8px">
+        <p id="regErr" class="error"></p>
+        <p id="regOk"  style="color:var(--ok);font-size:13px;font-weight:600"></p>
+        <button id="regBtn" type="submit" class="btn-primary">Create account</button>
+      </div>
+    </form>
+
+    <a href="login.html" class="back-link muted">Already have an account? Sign in</a>
+  </main>
+
+  <script type="module" src="js/register.js"></script>
+</body>
+</html>

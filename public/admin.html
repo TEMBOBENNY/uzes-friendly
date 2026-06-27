@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UZES Payments — Admin</title>
+  <link rel="stylesheet" href="css/styles.css?v=7">
+  <style>
+    .tabs { display: flex; gap: 6px; margin: 16px 0 0; border-bottom: 2px solid var(--line); }
+    .tab-btn {
+      padding: 9px 18px; border: none; background: none; cursor: pointer;
+      font-size: 14px; font-weight: 600; color: var(--muted);
+      border-bottom: 3px solid transparent; margin-bottom: -2px;
+    }
+    .tab-btn.active { color: var(--green); border-bottom-color: var(--green); }
+    .tab-panel.hidden { display: none; }
+
+    .user-row {
+      display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px;
+      padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13px;
+    }
+    .user-row:last-child { border-bottom: none; }
+    .user-name { font-weight: 600; }
+    .user-meta { color: var(--muted); font-size: 12px; }
+    .row-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .badge {
+      color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px;
+      border-radius: 20px; letter-spacing: .3px; text-transform: uppercase;
+    }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+    .btn-sm {
+      padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: 6px;
+      cursor: pointer; border: 1px solid var(--line); background: #f5f7fa; color: var(--text);
+      white-space: nowrap;
+    }
+    .btn-sm.danger { color: var(--danger); border-color: #f1c0bb; background: #fdf4f4; }
+    .btn-sm:hover { background: #e8ecf1; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } .form-grid .full { grid-column: 1; } }
+    .section-head { font-size: 15px; font-weight: 700; margin: 0 0 10px; }
+    .cancel-link {
+      background: none; border: none; color: var(--muted);
+      font-size: 13px; cursor: pointer; padding: 0; text-decoration: underline;
+    }
+    .form-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+    input:disabled, select:disabled { background: #f5f7fa; color: var(--muted); cursor: not-allowed; }
+
+    /* Bulk upload */
+    .bulk-log-row {
+      display: flex; gap: 8px; padding: 5px 0; font-size: 12.5px;
+      border-bottom: 1px solid var(--line); align-items: flex-start;
+    }
+    .bulk-log-row:last-child { border-bottom: none; }
+    .bulk-progress-bar { background: var(--line); border-radius: 4px; height: 8px; overflow: hidden; margin-bottom: 4px; }
+    .bulk-progress-fill { height: 100%; background: var(--ok); width: 0%; transition: width .2s; }
+
+    .danger-card { border: 1px solid #f1c0bb; }
+    .btn-danger {
+      background: var(--danger); color: #fff; border: none;
+      padding: 10px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 14px;
+    }
+    .btn-danger:hover { background: #a93226; }
+    .btn-danger:disabled { opacity: .6; cursor: default; }
+
+    #tab-account > div { max-width: 480px; margin: 0 auto; }
+    #tab-account > div + div { margin-top: 14px; }
+    #tab-system > .card { margin-left: auto; margin-right: auto; }
+  </style>
+</head>
+<body>
+  <!-- Sub-hero (new header with logo + tabs + user + sign out) injected by subhero.js -->
+
+  <main class="page">
+
+    <!-- ── Students panel ─────────────────────────────────────────── -->
+    <div id="tab-students" class="tab-panel">
+
+      <!-- Add / Edit student form -->
+      <div class="card">
+        <p class="section-head" id="stuFormHead">Add student account</p>
+        <form id="stuForm" class="form-grid">
+          <div>
+            <label for="stuName">Full name</label>
+            <input id="stuName" name="stuName" required placeholder="e.g. Chanda Mwale">
+          </div>
+          <div>
+            <label for="compNumber">Computer / Registration number</label>
+            <input id="compNumber" name="compNumber" required placeholder="e.g. 23/0012345/01">
+          </div>
+          <div>
+            <label for="stuGender">Gender</label>
+            <select id="stuGender" name="stuGender" required>
+              <option value="">Select gender</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+          </div>
+          <div>
+            <label for="stuYear">Year of study</label>
+            <select id="stuYear" name="stuYear" required>
+              <option value="">Select year</option>
+              <option value="1st Year">1st Year</option>
+              <option value="2nd Year">2nd Year</option>
+              <option value="3rd Year">3rd Year</option>
+              <option value="4th Year">4th Year</option>
+              <option value="5th Year">5th Year</option>
+              <option value="Graduate">Graduate</option>
+            </select>
+          </div>
+          <div class="full">
+            <label for="stuDept">Department</label>
+            <select id="stuDept" name="stuDept" required>
+              <option value="">Select department</option>
+              <option value="Agricultural Engineering">Agricultural Engineering</option>
+              <option value="Civil and Environmental Engineering">Civil and Environmental Engineering</option>
+              <option value="Electrical and Electronic Engineering">Electrical and Electronic Engineering</option>
+              <option value="Geomatic Engineering">Geomatic Engineering</option>
+              <option value="Mechanical Engineering">Mechanical Engineering</option>
+            </select>
+          </div>
+          <!-- Email: always visible; disabled (read-only) in edit mode -->
+          <div>
+            <label for="stuEmail">Email address</label>
+            <input id="stuEmail" name="stuEmail" type="email" required placeholder="student@unza.zm">
+          </div>
+          <!-- Password: hidden in edit mode -->
+          <div id="stuPasswordWrap">
+            <label for="stuPassword">Temporary password</label>
+            <input id="stuPassword" name="stuPassword" type="password" required
+              placeholder="Min 6 characters" minlength="6">
+          </div>
+          <div class="full form-actions">
+            <button id="stuBtn" type="submit" class="btn-primary" style="width:auto;padding:10px 22px">
+              Create student account
+            </button>
+            <button type="button" id="stuCancel" class="cancel-link" style="display:none">Cancel edit</button>
+            <p id="stuErr" class="error" style="margin:0"></p>
+          </div>
+        </form>
+      </div>
+
+      <!-- Bulk upload -->
+      <div class="card" style="margin-top:14px">
+        <p class="section-head">Bulk upload students</p>
+        <p class="muted small" style="margin-bottom:10px">
+          Upload a <strong>CSV or Excel (.xlsx)</strong>. Required columns:
+          <strong>Name, Email, Comp#, Password, Gender, Year, Department</strong>.
+          Gender: <em>Male</em> or <em>Female</em>. Year: <em>1st Year … 5th Year</em> or <em>Graduate</em> (or just <em>1–5</em>).
+          Department must match exactly.
+        </p>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <input type="file" id="bulkFile" accept=".csv,.xlsx,.xls" style="flex:1;min-width:0">
+          <button id="bulkBtn" class="btn-primary" style="width:auto;padding:10px 20px;margin-top:0">
+            Upload &amp; Create
+          </button>
+          <button id="templateBtn" type="button" class="btn-ghost" style="margin-top:0">
+            Download template
+          </button>
+        </div>
+        <div id="bulkProgress" style="display:none;margin-top:12px">
+          <div class="bulk-progress-bar">
+            <div class="bulk-progress-fill" id="bulkBar"></div>
+          </div>
+          <p id="bulkStatus" class="muted small" style="margin-top:4px"></p>
+        </div>
+        <div id="bulkLog" style="margin-top:10px"></div>
+      </div>
+
+      <!-- Student list -->
+      <div class="card" style="margin-top:14px">
+        <p class="section-head">Student accounts</p>
+        <input id="stuSearch" type="search" autocomplete="off"
+          placeholder="Search by name, computer number or email…"
+          style="width:100%;margin-bottom:12px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:13px">
+        <div id="stuList">
+          <div class="sk-row"><span class="sk sk-avatar-sm"></span><div style="flex:1"><span class="sk sk-line sk-w60" style="margin-bottom:5px"></span><span class="sk sk-line sk-w40"></span></div></div>
+          <div class="sk-row"><span class="sk sk-avatar-sm"></span><div style="flex:1"><span class="sk sk-line sk-w60" style="margin-bottom:5px"></span><span class="sk sk-line sk-w40"></span></div></div>
+          <div class="sk-row"><span class="sk sk-avatar-sm"></span><div style="flex:1"><span class="sk sk-line sk-w60" style="margin-bottom:5px"></span><span class="sk sk-line sk-w40"></span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Executives panel ───────────────────────────────────────── -->
+    <div id="tab-executives" class="tab-panel hidden">
+      <div class="card">
+        <p class="section-head" id="execFormHead">Add executive account</p>
+        <form id="execForm" class="form-grid">
+          <div>
+            <label for="execName">Full name</label>
+            <input id="execName" name="execName" required placeholder="e.g. Bwalya Tembo">
+          </div>
+          <div>
+            <label for="execPosition">Position</label>
+            <select id="execPosition" name="execPosition" required></select>
+          </div>
+          <!-- Email: always visible; disabled in edit mode -->
+          <div>
+            <label for="execEmail">Email address</label>
+            <input id="execEmail" name="execEmail" type="email" required placeholder="exec@example.com">
+          </div>
+          <!-- Password: hidden in edit mode -->
+          <div id="execPasswordWrap">
+            <label for="execPassword">Temporary password</label>
+            <input id="execPassword" name="execPassword" type="password" required
+              placeholder="Temporary password" minlength="6">
+          </div>
+          <div class="full form-actions">
+            <button id="execBtn" type="submit" class="btn-primary" style="width:auto;padding:10px 22px">
+              Create executive account
+            </button>
+            <button type="button" id="execCancel" class="cancel-link" style="display:none">Cancel edit</button>
+            <p id="execErr" class="error" style="margin:0"></p>
+          </div>
+        </form>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <p class="section-head">Executive accounts</p>
+        <div id="execList">
+          <div class="sk-row"><span class="sk sk-avatar-sm"></span><div style="flex:1"><span class="sk sk-line sk-w60" style="margin-bottom:5px"></span><span class="sk sk-line sk-w40"></span></div></div>
+          <div class="sk-row"><span class="sk sk-avatar-sm"></span><div style="flex:1"><span class="sk sk-line sk-w60" style="margin-bottom:5px"></span><span class="sk sk-line sk-w40"></span></div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+    <!-- ── System settings panel ────────────────────────────────── -->
+    <div id="tab-system" class="tab-panel hidden">
+      <div class="card" style="max-width:560px">
+        <p class="section-head">Email relay</p>
+        <p class="muted small" style="margin-bottom:14px">
+          The relay URL and token are stored in Firestore — never in source code.
+          Only executives can read them. After saving the token here, paste the
+          same value as the <strong>RELAY_TOKEN</strong> script property in your
+          Apps Script editor (Project Settings → Script properties).
+        </p>
+        <form id="settingsForm">
+          <label for="relayUrl">Apps Script relay URL</label>
+          <input id="relayUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec"
+            style="margin-bottom:12px">
+          <label for="relayToken">Relay token <span class="muted small">(shared secret)</span></label>
+          <input id="relayToken" type="password" placeholder="Generate a random string and paste here"
+            style="margin-bottom:4px">
+          <p class="muted small" style="margin-bottom:14px">
+            Generate one at: passwordsgenerator.net — use 32+ random characters.
+          </p>
+          <div style="display:flex;align-items:center;gap:8px;margin:16px 0;padding:12px;background:#f0f6f2;border-radius:6px;border-left:3px solid var(--ok)">
+            <input id="trialMode" type="checkbox" style="width:18px;height:18px;cursor:pointer">
+            <label for="trialMode" style="cursor:pointer;margin:0;font-size:14px;font-weight:600">
+              Trial mode — add "TRIAL RECEIPT" watermark to all receipts
+            </label>
+          </div>
+          <p id="settingsErr" class="error"></p>
+          <p id="settingsOk"  style="color:var(--ok);font-size:13px;font-weight:600"></p>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" style="width:auto;padding:10px 22px;margin-top:0">
+              Save settings
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Admin API — enables Firebase Auth deletion on student/exec remove -->
+      <div class="card" style="max-width:560px;margin-top:14px">
+        <p class="section-head">Admin API (full account deletion)</p>
+        <p class="muted small" style="margin-bottom:14px">
+          When set, deleting a student or executive also removes their
+          <strong>Firebase login account</strong> — they can never sign in again.
+          Must match the <strong>ADMIN_DELETE_SECRET</strong> you added to your
+          Cloudflare Worker secrets (see setup steps below).
+        </p>
+        <label for="adminDeleteToken">Admin delete secret</label>
+        <input id="adminDeleteToken" type="password"
+          placeholder="Paste the secret you set in Cloudflare" style="margin-bottom:4px">
+        <p id="adminApiErr" class="error" style="margin-top:4px;min-height:18px"></p>
+        <p id="adminApiOk" style="color:var(--ok);font-size:13px;font-weight:600;margin-top:2px;min-height:18px"></p>
+        <div class="form-actions">
+          <button id="saveAdminApiBtn" type="button" class="btn-primary"
+            style="width:auto;padding:10px 22px;margin-top:6px">Save</button>
+        </div>
+      </div>
+
+      <!-- Industrial Training Secretary account -->
+      <div class="card" style="max-width:560px;margin-top:14px" id="secAccountCard">
+        <p class="section-head">Industrial Training Secretary</p>
+        <p class="muted small" style="margin-bottom:14px">
+          This is a lecturer account separate from the student executives. The secretary manages
+          industrial attachment letters and gets their own dedicated dashboard at
+          <strong>industrial-secretary.html</strong>.
+        </p>
+        <div id="secAccountStatus"><p class="muted small">Loading…</p></div>
+      </div>
+
+      <!-- Library — seed course list from SoE handbook -->
+      <div class="card" style="max-width:560px;margin-top:14px">
+        <p class="section-head">Library — Seed course list</p>
+        <p class="muted small" style="margin-bottom:14px">
+          Populates the <strong>libraryCourses</strong> collection with all School of Engineering
+          undergraduate courses (Years 1–5, all 5 departments). Run once to enable the student
+          library. Re-running replaces the existing list.
+        </p>
+        <p id="seedLibraryStatus" style="font-size:13px;font-weight:600;min-height:20px;margin-bottom:10px"></p>
+        <button id="seedLibraryBtn" type="button" class="btn-primary"
+          style="width:auto;padding:10px 22px;margin-top:0">Seed library courses</button>
+      </div>
+
+      <!-- Academic year reset — archives & clears all financial data -->
+      <div class="card danger-card" style="max-width:560px;margin-top:14px">
+        <p class="section-head" style="color:var(--danger)">Reset academic year</p>
+        <p class="muted small" style="margin-bottom:14px">
+          Archives <strong>all</strong> financial records — student payments, other income and
+          expenses — into a dated <strong>Excel report saved to Cloudflare</strong> (the
+          <em>Archive</em> folder), then permanently clears them and deletes every payment
+          proof file. <strong>Student and executive accounts are kept.</strong> Afterwards the
+          Pending, All&nbsp;payments, Finances and Reports tabs will be empty.
+          <strong style="color:var(--danger)">This cannot be undone.</strong>
+        </p>
+        <p id="resetStatus" class="muted small" style="margin-bottom:8px"></p>
+        <p id="resetErr" class="error" style="margin-bottom:10px"></p>
+        <button id="resetYearBtn" class="btn-danger" type="button">Reset academic year</button>
+      </div>
+    </div>
+
+    <!-- ── Account panel ──────────────────────────────────────────── -->
+    <div id="tab-account" class="tab-panel hidden">
+      <div id="accPwBox"></div>
+      <div id="acc2faBox" style="margin-top:14px"></div>
+    </div>
+
+  </main>
+
+  <footer class="pub-footer">
+    <div class="footer-inner">
+      <p class="footer-tagline">The University of Zambia Engineering Society · School of Engineering</p>
+      <p class="footer-copy">&copy; <span id="footerYear"></span> UZES · <a href="mailto:uzesofficial@gmail.com">uzesofficial@gmail.com</a></p>
+    </div>
+  </footer>
+  <!-- System tab password-verification modal -->
+  <div id="sysVerifyModal" style="display:none;position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.45);align-items:center;justify-content:center;padding:16px">
+    <div style="background:#fff;border-radius:12px;padding:28px 28px 22px;max-width:380px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <p style="font-size:16px;font-weight:700;margin:0 0 5px">System settings</p>
+      <p class="muted small" style="margin:0 0 18px">Re-enter your admin password to continue.</p>
+      <form id="sysVerifyForm">
+        <label for="sysVerifyEmail">Email</label>
+        <input id="sysVerifyEmail" type="email" readonly
+          style="margin-bottom:12px;background:#f5f7fa;color:var(--muted)">
+        <label for="sysVerifyPw">Password</label>
+        <input id="sysVerifyPw" type="password" required placeholder="Your admin password"
+          style="margin-bottom:4px">
+        <p id="sysVerifyErr" class="error" style="margin:6px 0 14px;min-height:18px"></p>
+        <div style="display:flex;gap:10px">
+          <button type="submit" class="btn-primary" style="width:auto;padding:10px 22px;margin-top:0">Verify</button>
+          <button type="button" id="sysVerifyCancel" class="btn-ghost" style="margin-top:0">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>document.getElementById("footerYear").textContent = new Date().getFullYear();</script>
+
+  <!-- SheetJS for Excel parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script type="module" src="js/admin.js"></script>
+  <script src="js/chrome.js"></script>
+</body>
+</html>

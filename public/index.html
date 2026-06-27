@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UZES — University of Zambia Engineering Society</title>
+  <meta name="description" content="The University of Zambia Engineering Society — promoting engineering excellence, fellowship and professional development.">
+  <link rel="icon" type="image/png" href="img/uzes-logo.png">
+  <link rel="stylesheet" href="css/styles.css?v=7">
+</head>
+<body>
+
+  <nav class="pub-nav">
+    <div class="pub-nav-inner">
+      <a href="index.html" class="pub-nav-brand">
+        <span class="logo-chip nav"><img src="img/uzes-logo.png" alt="UZES"></span>
+        <span class="pub-nav-name">The University of Zambia Engineering Society</span>
+      </a>
+      <div class="pub-nav-links" id="navLinks">
+        <a href="index.html" class="active">Home</a>
+        <a href="about.html">About</a>
+        <a href="activities.html">Activities</a>
+        <a href="faq.html">FAQ</a>
+        <a href="contact.html">Contact</a>
+        <a href="support.html">Support</a>
+      </div>
+      <div class="pub-nav-end">
+        <button type="button" class="theme-toggle-btn theme-toggle-nav" id="themeToggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+        <a href="login.html" class="pub-nav-signin">Sign in</a>
+        <button class="pub-nav-toggle" id="navToggle" aria-label="Open menu">&#9776;</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="pub-hero">
+    <div class="pub-hero-content">
+      <span class="logo-chip hero"><img src="img/uzes-logo.png" alt="UZES"></span>
+      <h1>The University of Zambia Engineering Society</h1>
+      <p class="pub-hero-sub">
+        Promoting the welfare and interests of engineering students,
+        fostering fellowship and encouraging professional excellence.
+      </p>
+      <div class="pub-hero-cta">
+        <a href="login.html" class="pub-cta-primary">Member Portal</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="pub-footer">
+    <div class="footer-inner">
+      <p class="footer-tagline">The University of Zambia Engineering Society · School of Engineering</p>
+      <p class="footer-copy">
+        &copy; <span id="footerYear"></span> UZES ·
+        <a href="mailto:uzesofficial@gmail.com">uzesofficial@gmail.com</a>
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById("footerYear").textContent = new Date().getFullYear();
+    document.getElementById("navToggle").addEventListener("click", () => {
+      document.getElementById("navLinks").classList.toggle("open");
+    });
+  </script>
+  <script src="js/chrome.js"></script>
+</body>
+</html>

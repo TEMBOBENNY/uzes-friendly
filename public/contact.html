@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact — UZES</title>
+  <meta name="description" content="Contact the University of Zambia Engineering Society — email, WhatsApp, postal address and social media.">
+  <link rel="icon" type="image/png" href="img/uzes-logo.png">
+  <link rel="stylesheet" href="css/styles.css?v=7">
+</head>
+<body>
+
+  <nav class="pub-nav">
+    <div class="pub-nav-inner">
+      <a href="index.html" class="pub-nav-brand">
+        <span class="logo-chip nav"><img src="img/uzes-logo.png" alt="UZES"></span>
+        <span class="pub-nav-name">The University of Zambia Engineering Society</span>
+      </a>
+      <div class="pub-nav-links" id="navLinks">
+        <a href="index.html">Home</a>
+        <a href="about.html">About</a>
+        <a href="activities.html">Activities</a>
+        <a href="faq.html">FAQ</a>
+        <a href="contact.html" class="active">Contact</a>
+        <a href="support.html">Support</a>
+      </div>
+      <div class="pub-nav-end">
+        <button type="button" class="theme-toggle-btn theme-toggle-nav" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+        <a href="login.html" class="pub-nav-signin">Sign in</a>
+        <button class="pub-nav-toggle" id="navToggle" aria-label="Open menu">&#9776;</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="pub-hero-sm">
+    <h1>Contact Us</h1>
+    <p>Get in touch with the UZES Executive Committee</p>
+  </div>
+
+  <main class="pub-main" style="max-width:920px">
+    <div class="info-grid">
+      <section class="info-box">
+        <h2 class="info-box-title">Contact information</h2>
+        <div id="contactInfo">
+          <div class="sk-row"><span class="sk" style="width:28px;height:28px;border-radius:6px;flex-shrink:0"></span><div style="flex:1"><span class="sk sk-line sk-w60" style="margin-bottom:6px"></span><span class="sk sk-line sk-w90"></span></div></div>
+          <div class="sk-row"><span class="sk" style="width:28px;height:28px;border-radius:6px;flex-shrink:0"></span><div style="flex:1"><span class="sk sk-line sk-w60" style="margin-bottom:6px"></span><span class="sk sk-line sk-w75"></span></div></div>
+          <div class="sk-row"><span class="sk" style="width:28px;height:28px;border-radius:6px;flex-shrink:0"></span><div style="flex:1"><span class="sk sk-line sk-w60" style="margin-bottom:6px"></span><span class="sk sk-line sk-w90"></span></div></div>
+        </div>
+      </section>
+      <section class="info-box">
+        <h2 class="info-box-title">Follow us</h2>
+        <div id="socialLinks">
+          <span class="sk sk-card" style="height:48px;border-radius:10px;margin-bottom:10px"></span>
+          <span class="sk sk-card" style="height:48px;border-radius:10px;margin-bottom:10px"></span>
+          <span class="sk sk-card" style="height:48px;border-radius:10px"></span>
+        </div>
+      </section>
+    </div>
+
+    <section style="margin-top:40px">
+      <h2 class="section-h2" style="margin-bottom:4px">Who to contact</h2>
+      <p class="section-sub">Reach the right office for your enquiry</p>
+      <p class="muted small" style="margin:-20px 0 18px">Tap a card to see who currently holds the role and their contact details.</p>
+      <div class="who-grid" id="whoGrid">
+        <button type="button" class="who-card" data-position="Secretary General"><div class="who-topic">Membership, records &amp; general correspondence</div><div class="who-role">Secretary General</div></button>
+        <button type="button" class="who-card" data-position="Treasurer"><div class="who-topic">Payments, dues &amp; donations</div><div class="who-role">Treasurer</div></button>
+        <button type="button" class="who-card" data-position="Social and Cultural Secretary"><div class="who-topic">Events, sports &amp; student welfare</div><div class="who-role">Social &amp; Cultural Secretary</div></button>
+        <button type="button" class="who-card" data-position="Information and Publicity Secretary"><div class="who-topic">Media, publicity &amp; enquiries</div><div class="who-role">Information &amp; Publicity Secretary</div></button>
+        <button type="button" class="who-card" data-position="Chairperson"><div class="who-topic">Partnerships &amp; overall leadership</div><div class="who-role">Chairperson</div></button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Profile dialog (shows the executive who holds a role) -->
+  <dialog id="profileDialog" class="profile-dialog">
+    <div class="dialog-inner" style="position:relative">
+      <button class="dialog-close" id="dialogClose">&#x2715;</button>
+      <div id="dialogBody"></div>
+    </div>
+  </dialog>
+
+  <footer class="pub-footer">
+    <div class="footer-inner">
+      <p class="footer-tagline">University of Zambia Engineering Society · School of Engineering</p>
+      <p class="footer-copy">
+        &copy; <span id="footerYear"></span> UZES ·
+        <a href="mailto:uzesofficial@gmail.com">uzesofficial@gmail.com</a>
+      </p>
+    </div>
+  </footer>
+
+  <script type="module" src="js/contact.js"></script>
+  <script>
+    document.getElementById("footerYear").textContent = new Date().getFullYear();
+    document.getElementById("navToggle").addEventListener("click", () => {
+      document.getElementById("navLinks").classList.toggle("open");
+    });
+    document.getElementById("dialogClose").addEventListener("click", () => {
+      document.getElementById("profileDialog").close();
+    });
+  </script>
+  <script src="js/chrome.js"></script>
+</body>
+</html>

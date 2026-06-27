@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "816235655370",
+    "project_id": "uzes-friendly-web",
+    "storage_bucket": "uzes-friendly-web.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:816235655370:android:f0414afcfcff655256c433",
+        "android_client_info": {
+          "package_name": "com.uzes.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3upfeVlUhcy2uNpqkoje_YMhy486GHJo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
