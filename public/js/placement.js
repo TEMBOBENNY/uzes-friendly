@@ -134,7 +134,7 @@ function renderPendingForm() {
             ${p.cvUrl ? "✓ CV uploaded" : "Click to upload or drag and drop"}
           </p>
         </div>
-        <input id="cvInput" type="file" accept=".pdf,.doc,.docx" style="display:none">
+        <input id="cvInput" type="file" accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.doc,.docx" style="display:none">
       </div>
 
       <p id="placeErr" class="error" style="margin-bottom:12px"></p>
@@ -162,9 +162,9 @@ function attachPendingFormListeners() {
   function updateProvinceCount() {
     const n = document.querySelectorAll('input[name="province"]:checked').length;
     if (!countEl) return;
-    countEl.innerHTML = n >= 2
-      ? `<span style="color:var(--ok)">✓ ${n} province${n > 1 ? "s" : ""} selected</span>`
-      : `<span style="color:var(--danger)">${n} selected — choose at least 2</span>`;
+    countEl.innerHTML = n === 2
+      ? `<span style="color:var(--ok)">✓ 2 provinces selected</span>`
+      : `<span style="color:var(--danger)">${n} selected — choose exactly 2</span>`;
   }
   provinceBoxes.forEach(cb => cb.addEventListener("change", updateProvinceCount));
   updateProvinceCount();
@@ -208,7 +208,7 @@ function attachPendingFormListeners() {
       const file     = cvInput ? cvInput.files[0] : null;
       const hasExistingCv = !!_placement?.cvUrl;
 
-      if (provinces.length < 2) throw new Error("Select at least 2 preferred provinces.");
+      if (provinces.length !== 2) throw new Error("Select exactly 2 preferred provinces.");
       if (!phone)    throw new Error("Enter a phone number.");
       if (!file && !hasExistingCv) throw new Error("Upload a CV.");
 

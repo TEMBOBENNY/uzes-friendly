@@ -698,6 +698,8 @@ async function serveFile(env, key, origin) {
 const ALLOWED_ORIGINS = [
   "https://uzes-friendly-web.web.app",
   "https://uzes-friendly-web.firebaseapp.com",
+  "https://localhost",      // Capacitor 8 Android WebView
+  "capacitor://localhost",  // Capacitor iOS WebView
 ];
 function pickOrigin(origin) {
   if (ALLOWED_ORIGINS.includes(origin)) return origin;

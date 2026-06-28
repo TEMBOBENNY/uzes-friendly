@@ -72,13 +72,12 @@ window.shOnTab = (id) => {
     // Wire the Letter Requests | Placements sub-tabs
     const pendTabs   = document.querySelectorAll('#tab-pending .ses-tab');
     const pendPanels = document.querySelectorAll('#tab-pending .ses-panel');
-    let _tsTabLoaded = false;
     pendTabs.forEach(btn => {
       btn.addEventListener('click', () => {
         const target = btn.dataset.ses;
         pendTabs.forEach(t   => t.classList.toggle('active', t.dataset.ses === target));
         pendPanels.forEach(p => p.classList.toggle('hidden', p.id !== target));
-        if (target === 'pend-placements' && !_tsTabLoaded) { _tsTabLoaded = true; loadTSReview(); }
+        if (target === 'pend-placements') loadTSReview();
       });
     });
   }

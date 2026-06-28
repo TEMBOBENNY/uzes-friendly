@@ -1478,14 +1478,13 @@ function initSGPlacements() {
   // Wire ses-tabs: Vacancies | Pending Review | Confirmed
   const sgTabs   = document.querySelectorAll('#tab-placements .ses-tab');
   const sgPanels = document.querySelectorAll('#tab-placements .ses-panel');
-  let _sgPendingLoaded = false, _sgConfirmedLoaded = false;
   sgTabs.forEach(btn => {
     btn.addEventListener('click', () => {
       const target = btn.dataset.ses;
       sgTabs.forEach(t   => t.classList.toggle('active', t.dataset.ses === target));
       sgPanels.forEach(p => p.classList.toggle('hidden', p.id !== target));
-      if (target === 'sg-pending'   && !_sgPendingLoaded)   { _sgPendingLoaded   = true; sgLoadTSReview(); }
-      if (target === 'sg-confirmed' && !_sgConfirmedLoaded) { _sgConfirmedLoaded = true; sgLoadConfirmedPlacements(); }
+      if (target === 'sg-pending')   sgLoadTSReview();
+      if (target === 'sg-confirmed') sgLoadConfirmedPlacements();
     });
   });
 
@@ -1747,10 +1746,9 @@ window.sgApprovePlacement = async (uid) => {
     // Background refresh — failure OK since card already shows ✓
     sgLoadTSReview().catch(() => {});
     sgLoadVacancies();
-    // Reset confirmed-tab guard so next visit picks up the new record
-    _sgConfirmedLoaded = false;
+    // If confirmed tab is currently open, refresh it to show the new record
     const sgConfTab = document.getElementById("sg-confirmed");
-    if (sgConfTab && !sgConfTab.classList.contains("hidden")) { _sgConfirmedLoaded = true; sgLoadConfirmedPlacements(); }
+    if (sgConfTab && !sgConfTab.classList.contains("hidden")) sgLoadConfirmedPlacements();
   } catch (err) {
     if (errEl) errEl.textContent = err.message;
     if (btn)   { btn.disabled = false; btn.textContent = "Approve & Send Letter"; }
@@ -1796,31 +1794,6 @@ async function sgLoadConfirmedPlacements() {
   const list = document.getElementById("sgConfirmedList");
   if (!list) return;
   list.innerHTML = "<p class='muted'>Loading…</p>";
-
-  const resetBtn = document.getElementById("sgResetConfirmedBtn");
-  if (resetBtn) {
-    resetBtn.onclick = async () => {
-      if (!confirm("Reset ALL confirmed placements back to pending?\n\nThis cannot be undone.")) return;
-      const msg = document.getElementById("sgResetConfirmedMsg");
-      msg.textContent = "Resetting…"; msg.style.color = "var(--muted)";
-      try {
-        const snap = await getDocs(query(collection(db, "placements"), where("placementStatus", "==", "confirmed")));
-        const batch = writeBatch(db);
-        snap.docs.forEach(d => batch.update(d.ref, {
-          placementStatus: "pending",
-          matchedCompanyId: null, matchedAt: null,
-          approvalMethod: null, tsReviewerId: null,
-          tsReviewerName: null, approvedAt: null
-        }));
-        await batch.commit();
-        list.innerHTML = "<p class='muted'>No confirmed placements yet.</p>";
-        msg.style.color = "var(--ok)"; msg.textContent = "All placements reset to pending.";
-        setTimeout(() => { msg.textContent = ""; }, 4000);
-      } catch (err) {
-        msg.style.color = "var(--danger)"; msg.textContent = err.message;
-      }
-    };
-  }
 
   try {
     const snap = await getDocs(query(collection(db, "placements"), where("placementStatus", "==", "confirmed")));
