@@ -117,6 +117,7 @@ function renderPendingForm() {
             ${prov}
           </label>`).join("")}
         </div>
+        <p id="provinceCount" style="font-size:12px;margin-top:6px"></p>
       </div>
 
       <div style="margin-bottom:16px">
@@ -154,6 +155,19 @@ function attachPendingFormListeners() {
   const phoneInput = document.getElementById("placePhone");
 
   if (!form) return; // panel not yet in DOM
+
+  // Province live counter
+  const provinceBoxes = document.querySelectorAll('input[name="province"]');
+  const countEl = document.getElementById("provinceCount");
+  function updateProvinceCount() {
+    const n = document.querySelectorAll('input[name="province"]:checked').length;
+    if (!countEl) return;
+    countEl.innerHTML = n >= 2
+      ? `<span style="color:var(--ok)">✓ ${n} province${n > 1 ? "s" : ""} selected</span>`
+      : `<span style="color:var(--danger)">${n} selected — choose at least 2</span>`;
+  }
+  provinceBoxes.forEach(cb => cb.addEventListener("change", updateProvinceCount));
+  updateProvinceCount();
 
   // Phone number formatter: +260 XX XXX XXXX
   if (phoneInput) {
@@ -483,14 +497,11 @@ async function doAccept(modal, placeholders, company) {
       customFields
     };
 
-    if (_placement.cvUrl) await deleteUpload(_placement.cvUrl);
-
     if (company.acceptMode === "manual") {
-      // Manual mode: save details and wait for TS to review and confirm
+      // Manual mode: TS must review CV before confirming — preserve cvUrl so TS can see it
       await updateDoc(doc(db, "placements", _user.uid), {
         placementStatus: "awaiting_ts_approval",
         customFields,
-        cvUrl: ""
       });
       modal.remove();
       // onSnapshot re-renders to awaiting state
@@ -514,6 +525,8 @@ async function doAccept(modal, placeholders, company) {
       placementStatus: "confirmed",
       cvUrl: ""
     });
+    // Clean up CV from R2 after auto-confirm (TS review not needed for auto mode)
+    if (_placement.cvUrl) await deleteUpload(_placement.cvUrl);
 
     modal.remove();
   } catch (err) {

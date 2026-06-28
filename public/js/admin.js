@@ -319,14 +319,10 @@ stuForm.addEventListener("submit", async (e) => {
 
   try {
     if (editingId) {
-      const col = stuForm.dataset.editingCol || "students";
-      await updateDoc(doc(db, col, editingId), { name, compNumber, gender, yearOfStudy, department });
-      // Re-index comp number (email unchanged — fetch it from Firestore)
-      const snap  = await getDoc(doc(db, col, editingId));
-      const email = snap.data()?.email;
-      if (email) {
-        await setDoc(doc(db, "compIndex", sanitizeCompNo(compNumber)), { email, uid: editingId });
-      }
+      const col   = stuForm.dataset.editingCol || "students";
+      const email = stuForm.stuEmail.value.trim();
+      await updateDoc(doc(db, col, editingId), { name, compNumber, gender, yearOfStudy, department, email });
+      await setDoc(doc(db, "compIndex", sanitizeCompNo(compNumber)), { email, uid: editingId });
       clearStuForm();
     } else {
       const email    = stuForm.stuEmail.value.trim();
@@ -359,10 +355,9 @@ window.editStu = async (uid, col) => {
   stuForm.stuGender.value  = u.gender      || "";
   stuForm.stuYear.value    = u.yearOfStudy || "";
   stuForm.stuDept.value    = u.department  || "";
-  // Show email as read-only so admin can see which account they're editing
   stuForm.stuEmail.value    = u.email || "";
-  stuForm.stuEmail.disabled = true;
-  stuForm.stuEmail.required = false;
+  stuForm.stuEmail.disabled = false;
+  stuForm.stuEmail.required = true;
   // Hide password — can't change via client SDK; use Reset PW instead
   document.getElementById("stuPasswordWrap").style.display = "none";
   stuForm.stuPassword.required = false;
@@ -605,6 +600,23 @@ function initBulkUpload() {
     });
     a.click(); URL.revokeObjectURL(a.href);
   });
+
+  document.getElementById("updateYearBtn").addEventListener("click", async () => {
+    if (!confirm("Open a one-time year-of-study edit window for all students?\n\nEach student will be able to update their year once, then it locks again. This cannot be undone until the next time you press this button.")) return;
+    const btn = document.getElementById("updateYearBtn");
+    btn.disabled = true; btn.textContent = "Activating…";
+    try {
+      await setDoc(doc(db, "siteSettings", "yearUpdate"), {
+        active: true,
+        startedAt: serverTimestamp()
+      });
+      alert("Year update activated. Students can now update their year of study once from their dashboard.");
+    } catch (e) {
+      alert("Failed to activate: " + e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = "Update Year";
+    }
+  });
 }
 
 function normaliseHeader(h) {
@@ -662,7 +674,7 @@ async function processBulkFile(file) {
   }
 
   const total = rows.length;
-  let succeeded = 0, failed = 0;
+  let succeeded = 0, failed = 0, skipped = 0;
   const log = [];
 
   for (let i = 0; i < rows.length; i++) {
@@ -685,6 +697,12 @@ async function processBulkFile(file) {
     }
 
     try {
+      // Skip if student number already registered (prevents duplicates on re-import)
+      const existing = await getDoc(doc(db, "compIndex", sanitizeCompNo(r.compNumber)));
+      if (existing.exists()) {
+        log.push({ ok: true, label, msg: "Skipped — student number already registered" }); skipped++;
+        updateBulkProgress(i + 1, total, succeeded, failed); continue;
+      }
       await createAccount(r.email, r.password, async (uid) => {
         await setDoc(doc(db, "students", uid), {
           role: "student", name: r.name, compNumber: r.compNumber.toUpperCase(),
@@ -705,7 +723,7 @@ async function processBulkFile(file) {
   }
 
   document.getElementById("bulkLog").innerHTML =
-    `<p style="font-weight:600;margin-bottom:8px">Results: ${succeeded} created, ${failed} failed</p>` +
+    `<p style="font-weight:600;margin-bottom:8px">Results: ${succeeded} created, ${skipped} skipped, ${failed} failed</p>` +
     log.map(l =>
       `<div class="bulk-log-row">
         <span>${l.ok ? "✅" : "❌"}</span>

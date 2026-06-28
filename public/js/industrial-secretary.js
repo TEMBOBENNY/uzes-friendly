@@ -524,7 +524,7 @@ async function loadConfirmedPlacements() {
           placementStatus: "pending",
           matchedCompanyId: null, matchedAt: null,
           approvalMethod: null, tsReviewerId: null,
-          tsReviewerName: null, approvedAt: null, cvUrl: null
+          tsReviewerName: null, approvedAt: null
         }));
         await batch.commit();
         list.innerHTML = "<p class='muted'>No confirmed placements yet.</p>";
@@ -1075,27 +1075,40 @@ window.approvePlacement = async (uid) => {
       province: company.province || "",
       district: company.district || "",
       placementType: company.type || "",
+      himselfHerself: student.gender === "Male" ? "himself" : "herself",
+      startDate: company.startDate || "",
+      endDate: company.endDate || "",
       templateDocUrl,
       customFields: placement.customFields || {}
     };
 
-    await fetch(url, {
+    // Update Firestore FIRST — email is best-effort.
+    await updateDoc(doc(db, "placements", uid), {
+      placementStatus: "confirmed",
+      approvalMethod:  "manual",
+      tsReviewerId:    _user.uid,
+      tsReviewerName:  _profile?.name || _user.email || "",
+      approvedAt:      serverTimestamp(),
+      cvUrl: ""
+    });
+
+    // Show immediate success in the card before the async list refresh runs
+    const card = btn?.closest(".req-card");
+    if (card) card.innerHTML = `<div style="padding:12px 14px;color:var(--ok);font-weight:600">✓ Placement confirmed — letter being sent to ${esc(student.email || "student")}.</div>`;
+
+    if (student.fcmToken) sendPush(student.fcmToken, "Placement Confirmed!", `Your ${company.type || "industrial"} placement at ${company.companyName || "a company"} has been confirmed.`);
+
+    fetch(url, {
       method: "POST", mode: "no-cors",
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({ _token: token || "", ...payload })
     });
 
-    await updateDoc(doc(db, "placements", uid), {
-      placementStatus: "confirmed",
-      approvalMethod:  "manual",
-      tsReviewerId:    _user.uid,
-      tsReviewerName:  _profile.name || _user.email || "",
-      approvedAt:      serverTimestamp(),
-      cvUrl: ""
-    });
-    if (student.fcmToken) sendPush(student.fcmToken, "Placement Confirmed!", `Your ${company.type || "industrial"} placement at ${company.companyName || "a company"} has been confirmed.`);
-
-    loadTSReview();
+    // Background refresh — failure is OK; user already saw the ✓ success above
+    loadTSReview().catch(() => {});
+    // Also refresh confirmed tab if it's currently open
+    const confirmedTab = document.getElementById("tab-confirmed");
+    if (confirmedTab && !confirmedTab.classList.contains("hidden")) loadConfirmedPlacements();
   } catch (err) {
     if (errEl) errEl.textContent = err.message;
     if (btn)   { btn.disabled = false; btn.textContent = "Approve & Send Letter"; }

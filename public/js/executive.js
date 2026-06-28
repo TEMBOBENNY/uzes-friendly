@@ -1712,7 +1712,22 @@ window.sgApprovePlacement = async (uid) => {
       const t = templSnap.data();
       templateDocUrl = company.type === "Internship" ? (t.internshipDocUrl || "") : (t.attachmentDocUrl || "");
     }
-    await fetch(url, {
+    // Update Firestore FIRST — email is best-effort.
+    await updateDoc(doc(db, "placements", uid), {
+      placementStatus: "confirmed",
+      approvalMethod:  "manual",
+      tsReviewerId:    currentUser.uid,
+      tsReviewerName:  currentProfile?.name || currentUser.email || "",
+      approvedAt:      serverTimestamp(),
+      cvUrl: ""
+    });
+
+    // Immediate UI feedback before async list refresh
+    const card = btn?.closest(".req-card");
+    if (card) card.innerHTML = `<div style="padding:12px 14px;color:var(--ok);font-weight:600">✓ Placement confirmed — letter being sent to ${sgEsc(student.email || "student")}.</div>`;
+
+    if (student.fcmToken) sendPush(student.fcmToken, "Placement Confirmed!", `Your ${company.type || "industrial"} placement at ${company.companyName || "a company"} has been confirmed.`);
+    fetch(url, {
       method: "POST", mode: "no-cors",
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({
@@ -1723,20 +1738,19 @@ window.sgApprovePlacement = async (uid) => {
         phone: placement.phone || student.phone || "",
         companyName: company.companyName || "", province: company.province || "",
         district: company.district || "", placementType: company.type || "",
+        himselfHerself: student.gender === "Male" ? "himself" : "herself",
+        startDate: company.startDate || "",
+        endDate: company.endDate || "",
         templateDocUrl, customFields: placement.customFields || {}
       })
     });
-    await updateDoc(doc(db, "placements", uid), {
-      placementStatus: "confirmed",
-      approvalMethod:  "manual",
-      tsReviewerId:    currentUser.uid,
-      tsReviewerName:  currentProfile.name || currentUser.email || "",
-      approvedAt:      serverTimestamp(),
-      cvUrl: ""
-    });
-    if (student.fcmToken) sendPush(student.fcmToken, "Placement Confirmed!", `Your ${company.type || "industrial"} placement at ${company.companyName || "a company"} has been confirmed.`);
-    sgLoadTSReview();
+    // Background refresh — failure OK since card already shows ✓
+    sgLoadTSReview().catch(() => {});
     sgLoadVacancies();
+    // Reset confirmed-tab guard so next visit picks up the new record
+    _sgConfirmedLoaded = false;
+    const sgConfTab = document.getElementById("sg-confirmed");
+    if (sgConfTab && !sgConfTab.classList.contains("hidden")) { _sgConfirmedLoaded = true; sgLoadConfirmedPlacements(); }
   } catch (err) {
     if (errEl) errEl.textContent = err.message;
     if (btn)   { btn.disabled = false; btn.textContent = "Approve & Send Letter"; }
@@ -1796,7 +1810,7 @@ async function sgLoadConfirmedPlacements() {
           placementStatus: "pending",
           matchedCompanyId: null, matchedAt: null,
           approvalMethod: null, tsReviewerId: null,
-          tsReviewerName: null, approvedAt: null, cvUrl: null
+          tsReviewerName: null, approvedAt: null
         }));
         await batch.commit();
         list.innerHTML = "<p class='muted'>No confirmed placements yet.</p>";

@@ -88,6 +88,13 @@ function buildForm(profile, user, placeholders, settings) {
   document.getElementById("af-dept").value  = profile.department || "";
   document.getElementById("af-year").value  = profile.yearOfStudy || "";
   document.getElementById("af-email").value = user.email || "";
+  document.getElementById("af-phone").value = profile.phone || "";
+
+  // Lock fields the student cannot change — admin updates these via CSV upload
+  ["af-name","af-comp","af-dept","af-year","af-email"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.readOnly = true; el.classList.add("readonly-field"); }
+  });
 
   const customEl = document.getElementById("af-custom-fields");
   if (placeholders.length) {
