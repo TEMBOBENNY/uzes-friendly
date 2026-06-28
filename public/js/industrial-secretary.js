@@ -21,6 +21,36 @@ const DEPARTMENTS = [
 let _user, _profile;
 let _relayConfig = null;
 
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+function getDashGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function renderTSDash() {
+  const dc = document.getElementById("dashContent");
+  if (!dc || dc.dataset.loaded) return;
+  dc.dataset.loaded = "1";
+  const name = _profile?.name || "Secretary";
+  dc.innerHTML = `
+    <div class="card" style="margin-bottom:14px;background:var(--primary);color:#fff;padding:20px 22px">
+      <div style="font-size:18px;font-weight:700">${getDashGreeting()}, ${esc(name)}.</div>
+      <div style="font-size:14px;margin-top:4px;opacity:.85">Industrial Training Secretary &nbsp;·&nbsp; Here's your role overview.</div>
+    </div>
+    <div class="card" style="padding:20px 22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">What you can do</div>
+      <ul style="margin:0;padding-left:18px;line-height:1.8;font-size:14px;color:var(--muted)">
+        <li>Control the attachment/internship session — open or close applications</li>
+        <li>Review and approve student attachment letter requests</li>
+        <li>Approve or reject student placement confirmations (manual mode)</li>
+        <li>Manage the placement letter template and custom placeholders</li>
+        <li>View and track all confirmed placements</li>
+      </ul>
+    </div>`;
+}
+
 // ── Shared ────────────────────────────────────────────────────────────────────
 function esc(s) {
   return String(s ?? "")
@@ -57,18 +87,21 @@ protect(["executive", "admin"], async (user, profile) => {
   _user = user; _profile = profile;
 
 
-  initSubHero(user, profile, { page: "secretary", active: "tab-session", tabs: secretaryTabs() });
+  initSubHero(user, profile, { page: "secretary", active: "tab-dash", tabs: secretaryTabs() });
 
   await initSession();
 });
 
 // Lazy-load each tab the first time the sub-hero reveals it.
-const loaded = new Set(["tab-session"]);
+const loaded = new Set(["tab-dash"]);
 window.shOnTab = (id) => {
   if (loaded.has(id)) return;
   loaded.add(id);
+  if (id === "tab-dash") { renderTSDash(); return; }
   if (id === "tab-pending") {
     loadPending();
+    // Eagerly load placements so data is ready when the sub-tab is clicked
+    loadTSReview();
     // Wire the Letter Requests | Placements sub-tabs
     const pendTabs   = document.querySelectorAll('#tab-pending .ses-tab');
     const pendPanels = document.querySelectorAll('#tab-pending .ses-panel');
@@ -967,6 +1000,7 @@ window.deleteVacancy = async (vacancyId) => {
 async function loadTSReview() {
   const list = document.getElementById("tsReviewList");
   if (!list) return;
+  list.innerHTML = "<p class='muted small'>Loading…</p>";
   try {
     const snap = await getDocs(
       query(collection(db, "placements"), where("placementStatus", "==", "awaiting_ts_approval"))

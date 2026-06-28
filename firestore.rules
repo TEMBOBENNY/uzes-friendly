@@ -340,6 +340,12 @@ service cloud.firestore {
     }
     function canManageAttachment() { return isAdmin() || isSecretary(); }
 
+    function isViceSG() {
+      return isExec() && 'position' in myProfile()
+             && myProfile().position == 'Vice Secretary General';
+    }
+    function canManagePlacements() { return isAdmin() || isSecretary() || isSG() || isViceSG(); }
+
     // Settings + template + placeholders — secretary or admin edits; paid students read session status
     match /attachmentSettings/{id} {
       allow read:  if signedIn() && myActive();
@@ -381,7 +387,7 @@ service cloud.firestore {
 
     match /placements/{uid} {
       // Students read/write own placement doc while in pending state
-      allow read: if signedIn() && (myUid() == uid || isSecretary() || isSG());
+      allow read: if signedIn() && (myUid() == uid || canManagePlacements());
       allow create: if signedIn() && myActive()
                     && myUid() == uid
                     && myRole() == 'student'
@@ -410,15 +416,15 @@ service cloud.firestore {
                     && request.resource.data.placementStatus in ['confirmed', 'pending', 'awaiting_ts_approval']
                     && !request.resource.data.diff(resource.data)
                          .affectedKeys().hasAny(['preferredProvince','preferredProvinces','phone','createdBy','createdAt']);
-      // TS/SG can update any field (matching, expiry resets, etc.)
-      allow update: if (isSecretary() || isSG());
+      // TS/SG/Vice SG can update any field (matching, expiry resets, etc.)
+      allow update: if canManagePlacements();
       allow delete: if isAdmin();
     }
 
     // Vacancies: job postings created by TS or SG; students read to display matched company
     match /vacancies/{id} {
       allow read: if signedIn() && myActive();
-      allow create: if (isSecretary() || isSG())
+      allow create: if canManagePlacements()
                     && request.resource.data.companyName is string
                     && request.resource.data.companyName.size() > 0
                     && request.resource.data.province is string
@@ -428,11 +434,11 @@ service cloud.firestore {
                     && request.resource.data.departmentsRequired is map
                     && request.resource.data.slotsRemaining is map
                     && request.resource.data.createdBy == myUid();
-      // TS can update/match; SG can ONLY update vacant slots (no manual override)
+      // TS can update/match; SG/Vice SG can update slots but not departmentsRequired
       allow update: if isSecretary()
-                    || (isSG() && !request.resource.data.diff(resource.data)
+                    || ((isSG() || isViceSG()) && !request.resource.data.diff(resource.data)
                          .affectedKeys().hasAny(['departmentsRequired']));
-      allow delete: if isAdmin() || isSecretary() || isSG();
+      allow delete: if canManagePlacements();
     }
 
     // Placement archive: moved when fully confirmed

@@ -161,8 +161,8 @@ let systemVerified = false; // cleared each page load — re-auth required per s
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 protect(["admin"], (user, profile) => {
   adminUser = user; adminProfile = profile;
-  initSubHero(user, profile, { page: "admin", active: "tab-students", tabs: adminTabs() });
-  loadStudents();         // default visible tab only
+  initSubHero(user, profile, { page: "admin", active: "tab-dash", tabs: adminTabs() });
+  loadStudents();         // preload for fast tab switch
   buildPositionOptions(); // populate exec form (cheap, no query)
   initBulkUpload();       // wires buttons (no query)
   document.getElementById("stuSearch").addEventListener("input", renderStudents);
@@ -180,9 +180,42 @@ window.shGuardTab = (id) => {
 };
 // Lazy-load each tab the first time it opens.
 window.shOnTab = (id) => {
+  if (id === "tab-dash") renderAdminDash();
+  if (id === "tab-students" && !studsLoaded) { studsLoaded = true; /* already loaded in bootstrap */ }
   if (id === "tab-executives" && !execsLoaded) { execsLoaded = true; loadExecutives(); }
   if (id === "tab-system" && !settingsLoaded) { settingsLoaded = true; initSettings(); }
 };
+
+let studsLoaded = false;
+
+function renderAdminDash() {
+  const dc = document.getElementById("dashContent");
+  if (!dc || dc.dataset.loaded) return;
+  dc.dataset.loaded = "1";
+  const greeting = getDashGreeting();
+  dc.innerHTML = `
+    <div class="card" style="margin-bottom:14px;background:var(--primary);color:#fff;padding:20px 22px">
+      <div style="font-size:18px;font-weight:700">${greeting}, ${esc(adminProfile?.name || "Admin")}.</div>
+      <div style="font-size:14px;margin-top:4px;opacity:.85">Admin &nbsp;·&nbsp; Here's your role overview.</div>
+    </div>
+    <div class="card" style="padding:20px 22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">What you can do</div>
+      <ul style="margin:0;padding-left:18px;line-height:1.8;font-size:14px;color:var(--muted)">
+        <li>Manage student accounts — add, edit, delete, or import via CSV</li>
+        <li>Manage executive accounts and assign positions</li>
+        <li>Confirm payments and generate receipt emails</li>
+        <li>Configure system settings — email relay, 2FA, and more</li>
+        <li>View financial reports and income/expense records</li>
+      </ul>
+    </div>`;
+}
+
+function getDashGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
 
 // ── System tab 2FA (password re-auth) ─────────────────────────────────────────
 function showSystemVerify() {

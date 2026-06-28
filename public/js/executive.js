@@ -59,7 +59,7 @@ protect(["executive", "admin"], (user, profile) => {
                          || profile.role === "admin";
 
   const hash = location.hash.replace("#", "");
-  const active = hash && document.getElementById(hash) ? hash : "tab-pending";
+  const active = hash && document.getElementById(hash) ? hash : "tab-dash";
 
   initSubHero(user, profile, {
     page: "executive",
@@ -73,6 +73,81 @@ protect(["executive", "admin"], (user, profile) => {
   initChangePw();        // wires form — no query
   initVerifyScanner();   // reveals Verify Receipt button + wires scanner modal
 });
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+function getDashGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+const ROLE_DESCS = {
+  "Chairperson": [
+    "Lead executive committee meetings and set the agenda",
+    "Represent UZES in official capacity and external engagements",
+    "Confirm payments, manage finances, and oversee all operations",
+    "Manage public content, activities, and member communications",
+  ],
+  "Vice Chairperson": [
+    "Support the Chairperson and stand in during absence",
+    "Confirm payments and help oversee financial records",
+    "Assist with public content and member management",
+  ],
+  "Treasurer": [
+    "Confirm student payments and generate official receipts",
+    "Record income and expenses in the Finances ledger",
+    "Generate financial reports for committee review",
+  ],
+  "Industrial Training Secretary": [
+    "Control the attachment/internship application session (open/close)",
+    "Review and approve student attachment letter requests",
+    "Approve or reject student placement confirmations",
+    "Manage the placement letter template and custom placeholders",
+    "View and track all confirmed placements",
+  ],
+  "Secretary General": [
+    "Create and manage company vacancies for student placements",
+    "Run the matching algorithm to assign students to companies",
+    "Review and approve pending placement confirmations",
+    "Monitor all confirmed placements across departments",
+  ],
+  "Vice Secretary General": [
+    "Assist the Secretary General with vacancy management",
+    "Monitor and review student placement confirmations",
+    "Manage the Library — upload, moderate, and organise resources",
+  ],
+  "Information and Publicity Secretary": [
+    "Manage public website content — announcements, about pages",
+    "Post and edit society activities and events",
+    "Represent UZES in communications and social media",
+  ],
+  "Social and Cultural Secretary": [
+    "Organise social events and cultural activities",
+    "Post activities and events on the public website",
+  ],
+};
+
+function renderExecDash() {
+  const dc = document.getElementById("dashContent");
+  if (!dc || dc.dataset.loaded) return;
+  dc.dataset.loaded = "1";
+  const pos = currentProfile?.position || "";
+  const name = currentProfile?.name || "Executive";
+  const greeting = getDashGreeting();
+  const bullets = ROLE_DESCS[pos] || ["Manage payments, view reports, and assist society operations."];
+  dc.innerHTML = `
+    <div class="card" style="margin-bottom:14px;background:var(--primary);color:#fff;padding:20px 22px">
+      <div style="font-size:18px;font-weight:700">${greeting}, ${esc(name)}.</div>
+      <div style="font-size:14px;margin-top:4px;opacity:.85">${esc(pos || "Executive")} &nbsp;·&nbsp; Here's your role overview.</div>
+    </div>
+    <div class="card" style="padding:20px 22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">What you can do</div>
+      <ul style="margin:0;padding-left:18px;line-height:1.8;font-size:14px;color:var(--muted)">
+        ${bullets.map(b => `<li>${esc(b)}</li>`).join("")}
+      </ul>
+    </div>`;
+}
 
 // ── Signature upload ──────────────────────────────────────────────────────────
 function initSignature() {
@@ -165,6 +240,7 @@ let sgPlacementsLoaded = false;
 // IMPORTANT: this must be assigned at module level (before protect() fires)
 // so it is available when initSubHero() calls show(active) synchronously.
 window.shOnTab = async (id) => {
+  if (id === "tab-dash") renderExecDash();
   if (id === "tab-all" && !allLoaded) {
     allLoaded = true;
     loadAll();
@@ -299,12 +375,34 @@ async function loadPending() {
 }
 
 // ── All payments ───────────────────────────────────────────────────────────────
+let _allDocs = [];
+
+function renderAllFiltered(q) {
+  const term = q.trim().toLowerCase();
+  const visible = term
+    ? _allDocs.filter(d => {
+        const p = d.data();
+        return (p.studentName || "").toLowerCase().includes(term)
+            || (p.compNumber  || "").toLowerCase().includes(term);
+      })
+    : _allDocs;
+  allList.innerHTML = visible.length
+    ? visible.map(d => payCard(d, false)).join("")
+    : `<p class='muted'>No payments match "${q}".</p>`;
+}
+
 async function loadAll() {
   allList.innerHTML = "<p class='muted'>Loading…</p>";
   try {
     const snap = await getDocs(query(collection(db, "payments"), orderBy("submittedAt", "desc")));
-    if (snap.empty) { allList.innerHTML = "<p class='muted'>No payments yet.</p>"; return; }
-    allList.innerHTML = snap.docs.map(d => payCard(d, false)).join("");
+    if (snap.empty) { allList.innerHTML = "<p class='muted'>No payments yet.</p>"; _allDocs = []; return; }
+    _allDocs = snap.docs;
+    const searchEl = document.getElementById("allSearchInput");
+    renderAllFiltered(searchEl ? searchEl.value : "");
+    if (searchEl && !searchEl.dataset.wired) {
+      searchEl.dataset.wired = "1";
+      searchEl.addEventListener("input", e => renderAllFiltered(e.target.value));
+    }
   } catch (e) { allList.innerHTML = `<p class='error'>${e.message}</p>`; }
 }
 
@@ -328,7 +426,8 @@ window.confirmPayment = async (payId) => {
     await runTransaction(db, async (tx) => {
       const counterRef  = doc(db, "counters", "receipts");
       const counterSnap = await tx.get(counterRef);
-      receiptNo = (counterSnap.exists() ? counterSnap.data().seq : 0) + 1;
+      const prevSeq = counterSnap.exists() ? counterSnap.data().seq : 0;
+      receiptNo = prevSeq >= 9999 ? 1 : prevSeq + 1;
       tx.set(counterRef, { seq: receiptNo });
       tx.update(doc(db, "payments", payId), {
         status: "confirmed", reviewedBy: currentUser.uid,
@@ -1473,7 +1572,10 @@ function sgEsc(s) {
 
 function initSGPlacements() {
   sgInitDeptGrid();
+  // Eager-load all three panels so data is ready when the user clicks any sub-tab
   sgLoadVacancies();
+  sgLoadTSReview();
+  sgLoadConfirmedPlacements();
 
   // Wire ses-tabs: Vacancies | Pending Review | Confirmed
   const sgTabs   = document.querySelectorAll('#tab-placements .ses-tab');

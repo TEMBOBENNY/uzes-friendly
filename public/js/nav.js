@@ -32,6 +32,7 @@ export function studentTabs(current) {
 // Executive tabs. `flags` toggles position-gated tabs.
 export function executiveTabs(flags = {}) {
   const tabs = [
+    { id: "tab-dash",     label: "Dashboard",    icon: "dash"  },
     { id: "tab-pending",  label: "Pending",      icon: "inbox" },
     { id: "tab-all",      label: "All payments", icon: "fin"   },
     { id: "tab-finances", label: "Finances",     icon: "bank"  },
@@ -47,6 +48,7 @@ export function executiveTabs(flags = {}) {
 
 export function adminTabs() {
   return [
+    { id: "tab-dash",       label: "Dashboard",  icon: "dash"   },
     { id: "tab-students",   label: "Students",   icon: "users"  },
     { id: "tab-executives", label: "Executives", icon: "exec"   },
     { id: "tab-account",    label: "Account",    icon: "acc"    },
@@ -56,6 +58,7 @@ export function adminTabs() {
 
 export function secretaryTabs() {
   return [
+    { id: "tab-dash",         label: "Dashboard",            icon: "dash"   },
     { id: "tab-session",      label: "Session Control",      icon: "toggle" },
     { id: "tab-pending",      label: "Pending Requests",     icon: "inbox"  },
     { id: "tab-approved",     label: "Approved",             icon: "check"  },

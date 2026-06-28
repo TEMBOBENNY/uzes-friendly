@@ -397,8 +397,13 @@ function buildLetterPdf(d) {
       'year of study':  d.yearOfStudy || '',
       'phone number':   d.phone       || '',
       // Training period — "June 23, 2026"
-      'start date':     formatDate(d.startDate),
-      'closing date':   formatDate(d.endDate),
+      'start date':     formatDate(d.startDate),   'Start date':   formatDate(d.startDate),
+      'closing date':   formatDate(d.endDate),     'Closing date': formatDate(d.endDate),
+      'end date':       formatDate(d.endDate),     'End date':     formatDate(d.endDate),
+      'himself/herself': d.himselfHerself || (isMale ? 'himself' : 'herself'),
+      'Himself/Herself': d.himselfHerself
+                           ? (d.himselfHerself.charAt(0).toUpperCase() + d.himselfHerself.slice(1))
+                           : (isMale ? 'Himself' : 'Herself'),
       // Secretary
       'industrial training secretary name':          d.secretaryName  || '',
       'email address-industrial training secretary': d.secretaryEmail || '',
@@ -707,7 +712,13 @@ function buildPlacementLetterPdf(d) {
       'type':              d.placementType || '', 'Type':           d.placementType || '',
       'department':        d.department || '',  'Department':     d.department || '',
       'year of study':     d.yearOfStudy || '',  'Year of study':  d.yearOfStudy || '',
-      'phone number':      d.phone || ''
+      'phone number':      d.phone || '',
+      'start date':        formatDate(d.startDate), 'Start date':  formatDate(d.startDate),
+      'end date':          formatDate(d.endDate),   'End date':    formatDate(d.endDate),
+      'himself/herself':   d.himselfHerself || (isMale ? 'himself' : 'herself'),
+      'Himself/Herself':   d.himselfHerself
+                             ? (d.himselfHerself.charAt(0).toUpperCase() + d.himselfHerself.slice(1))
+                             : (isMale ? 'Himself' : 'Herself')
     };
 
     for (var key in subs) {

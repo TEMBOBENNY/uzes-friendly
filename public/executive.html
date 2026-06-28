@@ -181,8 +181,16 @@
 
   <main class="page">
 
+    <!-- ── Dashboard tab ────────────────────────────────────────── -->
+    <div id="tab-dash" class="tab-panel" style="margin-top:16px">
+      <div id="dashContent">
+        <div class="sk sk-card" style="height:80px;margin-bottom:12px"></div>
+        <div class="sk sk-card" style="height:140px"></div>
+      </div>
+    </div>
+
     <!-- ── Pending tab ────────────────────────────────────────────── -->
-    <div id="tab-pending" class="tab-panel" style="margin-top:16px">
+    <div id="tab-pending" class="tab-panel hidden" style="margin-top:16px">
       <div id="pendingList">
         <div class="sk sk-card" style="height:140px;margin-bottom:12px"></div>
         <div class="sk sk-card" style="height:140px;margin-bottom:12px"></div>
@@ -191,6 +199,10 @@
 
     <!-- ── All payments tab ───────────────────────────────────────── -->
     <div id="tab-all" class="tab-panel hidden" style="margin-top:16px">
+      <div style="margin-bottom:12px">
+        <input id="allSearchInput" type="search" placeholder="Search by name or computer number…"
+          style="width:100%;padding:10px 14px;font-size:14px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);box-sizing:border-box">
+      </div>
       <div id="allList">
         <div class="sk sk-card" style="height:110px;margin-bottom:12px"></div>
         <div class="sk sk-card" style="height:110px;margin-bottom:12px"></div>
