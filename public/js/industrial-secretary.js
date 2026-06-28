@@ -50,11 +50,10 @@ function renderTSDash() {
       </ul>
     </div>
     <div class="card" style="padding:20px 22px">
-      <div style="font-size:15px;font-weight:700;margin-bottom:12px;color:var(--text)">As an executive you can also</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px;color:var(--text)">Account</div>
       <ul style="margin:0;padding-left:18px;line-height:1.8;font-size:14px;color:var(--text)">
-        <li>View pending payments and the full payments history</li>
-        <li>Verify receipts via the QR scanner</li>
-        <li>Update your profile signature and account settings</li>
+        <li>Update your profile signature used on generated placement letters</li>
+        <li>Change your account password</li>
       </ul>
     </div>`;
 }

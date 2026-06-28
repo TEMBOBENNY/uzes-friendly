@@ -76,6 +76,10 @@ protect(["executive", "admin"], (user, profile) => {
 });
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
 function getDashGreeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good morning";
