@@ -1,4 +1,4 @@
-name: Environment Check (Capacitor)
+name: Build Android APK
 
 on:
   workflow_dispatch:
@@ -6,26 +6,34 @@ on:
     branches: [ main ]
 
 jobs:
-  check:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - name: Verify Node & npm
-        run: |
-          node -v
-          npm -v
+      - run: npm ci
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm install @capacitor/core @capacitor/cli
 
-      - name: Verify Capacitor CLI
-        run: npx cap --version
+      - run: npx cap sync android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
