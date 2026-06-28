@@ -9,32 +9,44 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
- steps:
-  - uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  - uses: actions/setup-node@v4
-    with:
-      node-version: 22
-      cache: npm
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
 
-  - run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-  - run: npm install @capacitor/core @capacitor/cli
+      - name: Install Capacitor CLI
+        run: npm install @capacitor/core @capacitor/cli
 
-  # 🔥 THIS IS MISSING IN YOUR CURRENT FILE
-  - run: npx cap sync android
+      - name: Build web app
+        run: npm run build
 
-  - uses: actions/setup-java@v4
-    with:
-      distribution: temurin
-      java-version: 17
+      - name: Sync Capacitor (generate Android project)
+        run: npx cap sync android
 
-  - run: |
-      cd android
-      chmod +x gradlew
-      ./gradlew assembleDebug
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
-  - uses: actions/upload-artifact@v4
-    with:
-      name: apk-debug
-      path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Grant execute permission for Gradle
+        run: chmod +x android/gradlew
+
+      - name: Build APK (Debug)
+        run: |
+          cd android
+          ./gradlew assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
