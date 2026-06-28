@@ -17,16 +17,14 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
-
-      - run: npm install @capacitor/core @capacitor/cli
-
-      - run: npx cap sync android
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
+
+      - run: npm ci
+
+      - run: npx cap sync android
 
       - run: |
           cd android
