@@ -388,8 +388,8 @@ service cloud.firestore {
                     && request.resource.data.placementStatus == 'pending'
                     && request.resource.data.cvUrl is string
                     && request.resource.data.cvUrl.size() > 0
-                    && request.resource.data.preferredProvince is string
-                    && request.resource.data.preferredProvince.size() > 0
+                    && request.resource.data.preferredProvinces is list
+                    && request.resource.data.preferredProvinces.size() >= 1
                     && request.resource.data.phone is string
                     && request.resource.data.phone.size() > 0
                     && request.resource.data.rejectionCount == 0;
@@ -409,7 +409,7 @@ service cloud.firestore {
                     && resource.data.placementStatus == 'matched'
                     && request.resource.data.placementStatus in ['confirmed', 'pending', 'awaiting_ts_approval']
                     && !request.resource.data.diff(resource.data)
-                         .affectedKeys().hasAny(['preferredProvince','phone','createdBy','createdAt']);
+                         .affectedKeys().hasAny(['preferredProvince','preferredProvinces','phone','createdBy','createdAt']);
       // TS/SG can update any field (matching, expiry resets, etc.)
       allow update: if (isSecretary() || isSG());
       allow delete: if isAdmin();
@@ -485,6 +485,12 @@ service cloud.firestore {
                     || (isChairOrVice() && resource.data.requestedBy != myUid());
 
       allow delete: if isAdmin();
+    }
+
+    // Site-wide settings written by admin (e.g. yearUpdate flag for student year edits)
+    match /siteSettings/{id} {
+      allow read:  if signedIn() && myActive();
+      allow write: if isAdmin();
     }
   }
 }

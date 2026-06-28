@@ -1,7 +1,7 @@
 import { auth, db } from "./firebase.js";
 import { protect } from "./guard.js";
 import {
-  collection, doc, addDoc, getDocs, getDoc, onSnapshot, query,
+  collection, doc, addDoc, getDocs, getDoc, updateDoc, onSnapshot, query,
   where, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { uploadProof } from "./upload.js";
@@ -10,6 +10,7 @@ import { studentTabs } from "./nav.js?v=2";
 import { initLibrary } from "./library.js?v=12";
 import { initAttachment } from "./attachment.js?v=2";
 import { initPlacement } from "./placement.js?v=2";
+import { registerFCMToken } from "./fcm.js";
 
 const METHODS = ["Airtel Money", "MTN Money", "Zamtel Money", "Zed Mobile", "Cash"];
 const CATEGORIES = ["Membership Dues", "Event Fee", "Fine", "Subscription", "Other"];
@@ -30,6 +31,7 @@ let currentUser, currentProfile;
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 protect(["student"], (user, profile) => {
   currentUser = user; currentProfile = profile;
+  registerFCMToken(user.uid, "students").catch(() => {});
 
   // Lazy-init library, attachment, and placement on first tab open
   let libInited = false, attInited = false, placeInited = false;
@@ -78,24 +80,132 @@ async function renderDashboard() {
   document.getElementById("dashName").textContent = `${greeting}, ${firstName}`;
 
   const p = currentProfile;
-  const fields = [
+
+  // Check whether admin has opened a year-of-study edit window
+  let yearUpdateActive = false, yearUpdateStartedAt = null;
+  try {
+    const yuSnap = await getDoc(doc(db, "siteSettings", "yearUpdate"));
+    if (yuSnap.exists()) {
+      const yu = yuSnap.data();
+      yearUpdateActive    = yu.active === true;
+      yearUpdateStartedAt = yu.startedAt || null;
+    }
+  } catch (_) {}
+
+  // Student can edit year if flag is active AND they haven't updated this cycle
+  const canEditYear = yearUpdateActive && (
+    !p.yearUpdatedAt ||
+    (yearUpdateStartedAt && p.yearUpdatedAt.seconds < yearUpdateStartedAt.seconds)
+  );
+
+  const readOnlyFields = [
     ["Full name",    p.name],
     ["Comp / Reg #", p.compNumber],
     ["Email",        p.email || currentUser.email],
-    ["Phone",        p.phone],
     ["Gender",       p.gender],
-    ["Year of study",p.yearOfStudy],
     ["Department",   p.department || p.school],
   ];
-  document.getElementById("dashInfo").innerHTML = fields.map(([label, val]) => `
-    <div class="dash-info-item">
-      <span class="dash-info-label">${label}</span>
-      <span class="dash-info-val">${esc(val || "—")}</span>
-    </div>`).join("");
 
-  // Membership badge (Membership Dues confirmed?)
+  const yearRow = `
+    <div class="dash-info-item" style="grid-column:1/-1">
+      <span class="dash-info-label">Year of study</span>
+      <div id="yearDisplay" style="display:flex;align-items:center;gap:8px">
+        <span class="dash-info-val" id="yearVal">${esc(p.yearOfStudy || "—")}</span>
+        ${canEditYear ? `<button id="yearEditBtn" class="btn-ghost" style="padding:3px 10px;font-size:12px">Edit</button>` : ""}
+      </div>
+      <div id="yearEditForm" style="display:none;margin-top:8px">
+        <select id="yearInput" style="width:auto;font-size:14px;padding:7px 10px">
+          ${["1st Year","2nd Year","3rd Year","4th Year","5th Year","Graduate"].map(y =>
+            `<option value="${y}"${p.yearOfStudy === y ? " selected" : ""}>${y}</option>`
+          ).join("")}
+        </select>
+        <button id="yearSaveBtn" class="btn-primary" style="width:auto;padding:7px 16px;margin-top:0;font-size:13px;margin-left:8px">Save</button>
+        <button id="yearCancelBtn" class="btn-ghost" style="padding:7px 12px;font-size:13px;margin-left:4px">Cancel</button>
+        <p id="yearErr" class="error" style="font-size:12px;margin-top:4px"></p>
+      </div>
+    </div>`;
+
+  const phoneRow = `
+    <div class="dash-info-item" style="grid-column:1/-1">
+      <span class="dash-info-label">Phone</span>
+      <div id="phoneDisplay" style="display:flex;align-items:center;gap:8px">
+        <span class="dash-info-val" id="phoneVal">${esc(p.phone || "—")}</span>
+        <button id="phoneEditBtn" class="btn-ghost" style="padding:3px 10px;font-size:12px">Edit</button>
+      </div>
+      <div id="phoneEditForm" style="display:none;margin-top:8px">
+        <input id="phoneInput" type="tel" value="${esc(p.phone || "")}" placeholder="+260 97 123 4567"
+          style="display:inline-block;width:auto;max-width:200px;font-size:14px;padding:7px 10px">
+        <button id="phoneSaveBtn" class="btn-primary" style="width:auto;padding:7px 16px;margin-top:0;font-size:13px;margin-left:8px">Save</button>
+        <button id="phoneCancelBtn" class="btn-ghost" style="padding:7px 12px;font-size:13px;margin-left:4px">Cancel</button>
+        <p id="phoneErr" class="error" style="font-size:12px;margin-top:4px"></p>
+      </div>
+    </div>`;
+
+  document.getElementById("dashInfo").innerHTML =
+    readOnlyFields.map(([label, val]) => `
+      <div class="dash-info-item">
+        <span class="dash-info-label">${label}</span>
+        <span class="dash-info-val">${esc(val || "—")}</span>
+      </div>`).join("") + yearRow + phoneRow;
+
+  // Wire year edit (only if unlocked)
+  if (canEditYear) {
+    document.getElementById("yearEditBtn").addEventListener("click", () => {
+      document.getElementById("yearDisplay").style.display = "none";
+      document.getElementById("yearEditForm").style.display = "block";
+    });
+    document.getElementById("yearCancelBtn").addEventListener("click", () => {
+      document.getElementById("yearDisplay").style.display = "flex";
+      document.getElementById("yearEditForm").style.display = "none";
+    });
+    document.getElementById("yearSaveBtn").addEventListener("click", async () => {
+      const newYear = document.getElementById("yearInput").value;
+      const btn = document.getElementById("yearSaveBtn");
+      btn.disabled = true; btn.textContent = "Saving…";
+      try {
+        await updateDoc(doc(db, currentProfile.__collection || "students", currentUser.uid), {
+          yearOfStudy: newYear, yearUpdatedAt: serverTimestamp()
+        });
+        currentProfile.yearOfStudy = newYear;
+        document.getElementById("yearVal").textContent = newYear;
+        document.getElementById("yearEditForm").style.display = "none";
+        document.getElementById("yearDisplay").style.display = "flex";
+        document.getElementById("yearEditBtn").remove(); // one edit only
+      } catch (e) {
+        document.getElementById("yearErr").textContent = "Save failed: " + e.message;
+        btn.disabled = false; btn.textContent = "Save";
+      }
+    });
+  }
+
+  // Wire phone edit
+  document.getElementById("phoneEditBtn").addEventListener("click", () => {
+    document.getElementById("phoneDisplay").style.display = "none";
+    document.getElementById("phoneEditForm").style.display = "block";
+  });
+  document.getElementById("phoneCancelBtn").addEventListener("click", () => {
+    document.getElementById("phoneDisplay").style.display = "flex";
+    document.getElementById("phoneEditForm").style.display = "none";
+  });
+  document.getElementById("phoneSaveBtn").addEventListener("click", async () => {
+    const newPhone = document.getElementById("phoneInput").value.trim();
+    const btn = document.getElementById("phoneSaveBtn");
+    if (!newPhone) { document.getElementById("phoneErr").textContent = "Phone cannot be empty."; return; }
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      await updateDoc(doc(db, currentProfile.__collection || "students", currentUser.uid), { phone: newPhone });
+      currentProfile.phone = newPhone;
+      document.getElementById("phoneVal").textContent = newPhone;
+      document.getElementById("phoneDisplay").style.display = "flex";
+      document.getElementById("phoneEditForm").style.display = "none";
+      document.getElementById("phoneErr").textContent = "";
+    } catch (e) {
+      document.getElementById("phoneErr").textContent = "Save failed: " + e.message;
+      btn.disabled = false; btn.textContent = "Save";
+    }
+  });
+
   loadMembership();
-  // Right-side media, configurable by Info & Publicity secretary
   loadDashboardMedia();
 }
 

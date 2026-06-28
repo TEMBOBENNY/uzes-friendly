@@ -56,11 +56,12 @@ export function adminTabs() {
 
 export function secretaryTabs() {
   return [
-    { id: "tab-session",      label: "Session Control",  icon: "toggle" },
-    { id: "tab-pending",      label: "Pending Requests", icon: "inbox"  },
-    { id: "tab-approved",     label: "Approved",         icon: "check"  },
-    { id: "tab-template",     label: "Template",         icon: "file"   },
-    { id: "tab-placeholders", label: "Placeholders",     icon: "tag"    },
-    { id: "tab-account",      label: "Account",          icon: "acc"    },
+    { id: "tab-session",      label: "Session Control",      icon: "toggle" },
+    { id: "tab-pending",      label: "Pending Requests",     icon: "inbox"  },
+    { id: "tab-approved",     label: "Approved",             icon: "check"  },
+    { id: "tab-confirmed",    label: "Confirmed Placements", icon: "users"  },
+    { id: "tab-template",     label: "Template",             icon: "file"   },
+    { id: "tab-placeholders", label: "Placeholders",         icon: "tag"    },
+    { id: "tab-account",      label: "Account",              icon: "acc"    },
   ];
 }

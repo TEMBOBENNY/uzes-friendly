@@ -994,11 +994,31 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--green); bor
 [data-theme="dark"] .verify-card .verify-fail .verify-big-icon { color: #f85149; }
 [data-theme="dark"] .verify-card .verify-details { border-color: #30363d; }
 
+/* ── Global form elements ── */
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea { background: #0d1117; border-color: #30363d; color: #c9d1d9; }
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder { color: #6e7681; }
+[data-theme="dark"] input:focus,
+[data-theme="dark"] select:focus,
+[data-theme="dark"] textarea:focus { outline-color: #58a6ff; border-color: #58a6ff; }
+[data-theme="dark"] .file-upload-label { background: #0d1117; border-color: #30363d; color: #8b949e; }
+[data-theme="dark"] .file-upload-label:hover { border-color: #58a6ff; color: #58a6ff; }
+[data-theme="dark"] .drop-zone { background: #0d1117; }
+[data-theme="dark"] .drop-zone:hover,
+[data-theme="dark"] .drop-zone.dragover { background: rgba(88,166,255,.06); border-color: #58a6ff; }
+[data-theme="dark"] .modal-overlay { background: rgba(0,0,0,.65); }
+[data-theme="dark"] .modal-box { background: #161b22; }
+[data-theme="dark"] .modal-title { color: #c9d1d9; }
+[data-theme="dark"] .modal-sub { color: #8b949e; }
+[data-theme="dark"] .readonly-field { background: #21262d !important; color: #6e7681 !important; }
+
 /* ═══════════════════════════════════════════════════════════════════
    WHATSAPP FLOATING BUTTON
    ═══════════════════════════════════════════════════════════════════ */
 .wa-float {
-  position: fixed; bottom: 24px; right: 24px; z-index: 9998;
+  position: fixed; bottom: 24px; left: 24px; z-index: 9998;
   width: 56px; height: 56px; border-radius: 50%;
   background: #25d366; color: #fff; border: none;
   box-shadow: 0 4px 16px rgba(37,211,102,.35);
@@ -1011,14 +1031,14 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--green); bor
 /* Desktop: show a label on hover */
 @media (min-width: 641px) {
   .wa-float:hover::after {
-    content: "Support"; position: absolute; right: 64px; white-space: nowrap;
+    content: "Support"; position: absolute; left: 64px; white-space: nowrap;
     background: #25d366; color: #fff; font-size: 13px; font-weight: 600;
     padding: 6px 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.15);
   }
 }
 
 @media (max-width: 640px) {
-  .wa-float { bottom: 16px; right: 16px; width: 48px; height: 48px; font-size: 24px; }
+  .wa-float { bottom: 16px; left: 16px; width: 48px; height: 48px; font-size: 24px; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════

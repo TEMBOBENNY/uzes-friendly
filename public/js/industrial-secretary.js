@@ -1,5 +1,6 @@
 import { db } from "./firebase.js";
 import { protect } from "./guard.js";
+import { sendPush } from "./fcm.js";
 import { initSubHero } from "./subhero.js?v=4";
 import { secretaryTabs } from "./nav.js";
 import {
@@ -66,8 +67,23 @@ const loaded = new Set(["tab-session"]);
 window.shOnTab = (id) => {
   if (loaded.has(id)) return;
   loaded.add(id);
-  if (id === "tab-pending")      loadPending();
+  if (id === "tab-pending") {
+    loadPending();
+    // Wire the Letter Requests | Placements sub-tabs
+    const pendTabs   = document.querySelectorAll('#tab-pending .ses-tab');
+    const pendPanels = document.querySelectorAll('#tab-pending .ses-panel');
+    let _tsTabLoaded = false;
+    pendTabs.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.ses;
+        pendTabs.forEach(t   => t.classList.toggle('active', t.dataset.ses === target));
+        pendPanels.forEach(p => p.classList.toggle('hidden', p.id !== target));
+        if (target === 'pend-placements' && !_tsTabLoaded) { _tsTabLoaded = true; loadTSReview(); }
+      });
+    });
+  }
   if (id === "tab-approved")     loadApproved();
+  if (id === "tab-confirmed")    loadConfirmedPlacements();
   if (id === "tab-template")     loadTemplate();
   if (id === "tab-placeholders") loadPlaceholders();
 };
@@ -173,7 +189,7 @@ async function initSession() {
     _placementLoaded = true;
     initDeptSlotsGrid();
     loadVacancies();
-    loadTSReview();
+    // loadTSReview() is now in the Pending Requests tab (second section)
   }
 
   // Session sub-tabs
@@ -223,6 +239,8 @@ async function initSession() {
         district,
         genderPreference:     document.getElementById("vacGender").value,
         acceptMode:           document.getElementById("vacAcceptMode").value,
+        startDate:            document.getElementById("vacStartDate").value || "",
+        endDate:              document.getElementById("vacEndDate").value   || "",
         departmentsRequired,
         slotsRemaining,
         status:               "open",
@@ -391,6 +409,12 @@ window.doApprove = async (id, removeCard = true) => {
       templateDocUrl
     });
 
+    if (r.studentUid) {
+      getDoc(doc(db, "students", r.studentUid)).then(snap => {
+        const tok = snap.data()?.fcmToken;
+        if (tok) sendPush(tok, "Letter Approved", "Your attachment letter has been approved! Check your email for the letter.");
+      }).catch(() => {});
+    }
     if (removeCard) document.getElementById(`req-card-${id}`)?.remove();
     checkPendingEmpty();
   } catch (err) {
@@ -423,6 +447,12 @@ window.doReject = async id => {
       secretaryEmail: sett.secretaryEmail || "",
       reason
     });
+    if (r.studentUid) {
+      getDoc(doc(db, "students", r.studentUid)).then(snap => {
+        const tok = snap.data()?.fcmToken;
+        if (tok) sendPush(tok, "Letter Not Approved", "Your attachment letter request was reviewed. Please check your dashboard for details.");
+      }).catch(() => {});
+    }
     document.getElementById(`req-card-${id}`)?.remove();
     checkPendingEmpty();
   } catch (err) {
@@ -473,6 +503,95 @@ async function loadApproved() {
       msg.style.color = "var(--danger)"; msg.textContent = err.message;
     }
   };
+}
+
+// ── Confirmed Placements ──────────────────────────────────────────────────────
+async function loadConfirmedPlacements() {
+  const list = document.getElementById("confirmedPlacementList");
+  if (!list) return;
+  list.innerHTML = "<p class='muted'>Loading…</p>";
+
+  const resetBtn = document.getElementById("resetConfirmedBtn");
+  if (resetBtn) {
+    resetBtn.onclick = async () => {
+      if (!confirm("Reset ALL confirmed placements back to pending?\n\nThis clears all matches so the algorithm can re-run. This cannot be undone.")) return;
+      const msg = document.getElementById("resetConfirmedMsg");
+      msg.textContent = "Resetting…"; msg.style.color = "var(--muted)";
+      try {
+        const snap = await getDocs(query(collection(db, "placements"), where("placementStatus", "==", "confirmed")));
+        const batch = writeBatch(db);
+        snap.docs.forEach(d => batch.update(d.ref, {
+          placementStatus: "pending",
+          matchedCompanyId: null, matchedAt: null,
+          approvalMethod: null, tsReviewerId: null,
+          tsReviewerName: null, approvedAt: null, cvUrl: null
+        }));
+        await batch.commit();
+        list.innerHTML = "<p class='muted'>No confirmed placements yet.</p>";
+        msg.style.color = "var(--ok)"; msg.textContent = "All placements reset to pending.";
+        setTimeout(() => { msg.textContent = ""; }, 4000);
+      } catch (err) {
+        msg.style.color = "var(--danger)"; msg.textContent = err.message;
+      }
+    };
+  }
+  try {
+    const snap = await getDocs(
+      query(collection(db, "placements"), where("placementStatus", "==", "confirmed"))
+    );
+    if (snap.empty) {
+      list.innerHTML = "<p class='muted'>No confirmed placements yet.</p>";
+      return;
+    }
+    const docs = snap.docs.slice().sort((a, b) => {
+      const ta = a.data().approvedAt?.seconds ?? 0;
+      const tb = b.data().approvedAt?.seconds ?? 0;
+      return tb - ta;
+    });
+
+    // Batch-load unique vacancies
+    const vacancyIds = [...new Set(docs.map(d => d.data().matchedCompanyId).filter(Boolean))];
+    const vacancyMap = {};
+    await Promise.all(vacancyIds.map(async id => {
+      const v = await getDoc(doc(db, "vacancies", id));
+      if (v.exists()) vacancyMap[id] = v.data();
+    }));
+
+    const cards = await Promise.all(docs.map(async d => {
+      const p = d.data();
+      const uid = d.id;
+      let student = {};
+      try {
+        const s = await getDoc(doc(db, "students", uid));
+        if (s.exists()) student = s.data();
+      } catch (_) {}
+      const company = vacancyMap[p.matchedCompanyId] || {};
+      const date = p.approvedAt?.toDate().toLocaleDateString("en-ZM", { day:"2-digit", month:"short", year:"numeric" }) || "—";
+      const methodBadge = p.approvalMethod === "auto"
+        ? `<span class="status-pill" style="background:#2563eb">AUTO</span>`
+        : `<span class="status-pill" style="background:#1e8a4c">MANUAL</span>`;
+      const reviewer = p.approvalMethod === "manual" && p.tsReviewerName
+        ? `<span>Reviewed by: <strong>${esc(p.tsReviewerName)}</strong></span>`
+        : "";
+      return `<div class="req-card" style="margin-bottom:10px">
+        <div class="req-card-head">
+          <div>
+            <div class="req-name">${esc(student.name || uid)}</div>
+            <div class="req-meta">
+              <span>${esc(student.compNumber || "")} · ${esc(student.department || "")} · Year ${esc(student.yearOfStudy || "?")}</span>
+              <span>Company: <strong>${esc(company.companyName || p.matchedCompanyId || "—")}</strong> · ${esc(company.province || "")} · ${esc(company.type || "")}</span>
+              ${reviewer}
+              <span>Confirmed: ${date}</span>
+            </div>
+          </div>
+          ${methodBadge}
+        </div>
+      </div>`;
+    }));
+    list.innerHTML = cards.join("");
+  } catch (err) {
+    list.innerHTML = `<p class='error'>Failed to load: ${err.message}</p>`;
+  }
 }
 
 // ── Letter fields preview ─────────────────────────────────────────────────────
@@ -783,13 +902,17 @@ function renderVacancyCard(id, v) {
         <div class="req-meta">
           <span>${esc(v.province)} · ${esc(v.district)} · ${esc(v.type)}</span>
           <span>Gender: ${esc(v.genderPreference || "All")} · ${v.acceptMode === "auto" ? "Auto-confirm" : "Manual review"}</span>
+          ${v.startDate ? `<span>Period: ${esc(v.startDate)} → ${esc(v.endDate || "—")}</span>` : ""}
           ${deptLines ? `<span style="font-size:11px">${deptLines}</span>` : ""}
         </div>
       </div>
       <span class="status-pill" style="background:${statusBg}">${statusTxt}</span>
     </div>
     <div class="req-actions">
-      <button class="btn-approve" id="assign-${id}" onclick="assignVacancy('${id}')">Assign Now</button>
+      ${remaining > 0
+        ? `<button class="btn-approve" id="assign-${id}" onclick="assignVacancy('${id}')">Assign Now</button>`
+        : `<span class="muted small" style="font-size:12px;color:var(--ok)">All slots filled</span>`
+      }
       <button class="btn-danger-sm" style="font-size:12px;padding:6px 12px" onclick="deleteVacancy('${id}')">Delete</button>
       <p id="assign-err-${id}" class="action-err" style="width:100%;margin:4px 0 0"></p>
     </div>
@@ -964,8 +1087,13 @@ window.approvePlacement = async (uid) => {
 
     await updateDoc(doc(db, "placements", uid), {
       placementStatus: "confirmed",
+      approvalMethod:  "manual",
+      tsReviewerId:    _user.uid,
+      tsReviewerName:  _profile.name || _user.email || "",
+      approvedAt:      serverTimestamp(),
       cvUrl: ""
     });
+    if (student.fcmToken) sendPush(student.fcmToken, "Placement Confirmed!", `Your ${company.type || "industrial"} placement at ${company.companyName || "a company"} has been confirmed.`);
 
     loadTSReview();
   } catch (err) {

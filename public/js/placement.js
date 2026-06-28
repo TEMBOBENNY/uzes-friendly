@@ -2,7 +2,7 @@ import { auth, db } from "./firebase.js";
 import { uploadCV, deleteUpload } from "./upload.js";
 import {
   collection, doc, getDoc, setDoc, updateDoc, onSnapshot, query, where,
-  serverTimestamp, getDocs
+  serverTimestamp, getDocs, deleteField
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let _user, _profile;
@@ -101,7 +101,8 @@ function esc(s) {
 // ── PENDING STATE ──────────────────────────────────────────────────────────────
 function renderPendingForm() {
   const p = _placement || {};
-  const provinces = ["Eastern", "Western", "Northern", "Southern", "Central", "Lusaka", "Copperbelt"];
+  const provinces = ["Central","Copperbelt","Eastern","Luapula","Lusaka","Muchinga","Northern","North-Western","Southern","Western"];
+  const selected = p.preferredProvinces || (p.preferredProvince ? [p.preferredProvince] : []);
 
   return `<div class="card" style="max-width:600px;margin:20px auto">
     <p style="font-size:16px;font-weight:700;margin-bottom:4px">Your Placement</p>
@@ -109,11 +110,13 @@ function renderPendingForm() {
 
     <form id="placementForm" novalidate>
       <div style="margin-bottom:16px">
-        <label for="placeProvince" style="display:block;font-weight:600;margin-bottom:6px">Preferred Province</label>
-        <select id="placeProvince" required style="width:100%;padding:10px;border:1px solid var(--line);border-radius:6px">
-          <option value="">— Select province —</option>
-          ${provinces.map(prov => `<option value="${prov}" ${p.preferredProvince === prov ? "selected" : ""}>${prov}</option>`).join("")}
-        </select>
+        <label style="display:block;font-weight:600;margin-bottom:6px">Preferred Provinces <span style="font-weight:400;color:var(--muted);font-size:13px">(select at least 2)</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          ${provinces.map(prov => `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-weight:400;font-size:14px">
+            <input type="checkbox" name="province" value="${prov}" ${selected.includes(prov) ? "checked" : ""} style="width:15px;height:15px;flex-shrink:0">
+            ${prov}
+          </label>`).join("")}
+        </div>
       </div>
 
       <div style="margin-bottom:16px">
@@ -135,7 +138,7 @@ function renderPendingForm() {
 
       <p id="placeErr" class="error" style="margin-bottom:12px"></p>
       <button id="placeSaveBtn" type="submit" class="btn-primary" style="width:100%;padding:11px;font-weight:700">
-        ${p.preferredProvince ? "Update Details" : "Complete Profile"}
+        ${(p.preferredProvinces?.length > 0 || p.preferredProvince) ? "Update Details" : "Complete Profile"}
       </button>
     </form>
   </div>`;
@@ -186,12 +189,12 @@ function attachPendingFormListeners() {
     _isSubmitting = true;
 
     try {
-      const province = document.getElementById("placeProvince").value.trim();
+      const provinces = [...document.querySelectorAll('input[name="province"]:checked')].map(cb => cb.value);
       const phone    = document.getElementById("placePhone").value.trim();
       const file     = cvInput ? cvInput.files[0] : null;
       const hasExistingCv = !!_placement?.cvUrl;
 
-      if (!province) throw new Error("Select a preferred province.");
+      if (provinces.length < 2) throw new Error("Select at least 2 preferred provinces.");
       if (!phone)    throw new Error("Enter a phone number.");
       if (!file && !hasExistingCv) throw new Error("Upload a CV.");
 
@@ -207,7 +210,8 @@ function attachPendingFormListeners() {
 
       if (_placement) {
         await updateDoc(doc(db, "placements", _user.uid), {
-          preferredProvince: province,
+          preferredProvinces: provinces,
+          preferredProvince: deleteField(),
           phone,
           cvUrl,
           updatedAt: serverTimestamp()
@@ -215,7 +219,7 @@ function attachPendingFormListeners() {
       } else {
         await setDoc(doc(db, "placements", _user.uid), {
           placementStatus: "pending",
-          preferredProvince: province,
+          preferredProvinces: provinces,
           phone,
           cvUrl,
           rejectionCount: 0,

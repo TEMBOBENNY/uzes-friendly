@@ -37,7 +37,8 @@ export async function buildEligibilityPool(dept, vacancy, payments) {
 
       // Filters
       if (student.department !== dept) continue;
-      if (p.preferredProvince !== vacancy.province) continue;
+      const prefs = p.preferredProvinces || (p.preferredProvince ? [p.preferredProvince] : []);
+      if (!prefs.includes(vacancy.province)) continue;
       if (!paidStudents.has(plSnap.id)) continue;
       if (vacancy.genderPreference !== "All" && student.gender !== vacancy.genderPreference) continue;
 
@@ -142,8 +143,17 @@ export async function commitMatches(vacancyId, matches) {
       for (const uid of students) {
         const placementRef = doc(db, "placements", uid);
         tx.update(placementRef, autoConfirm
-          ? { placementStatus: "confirmed", matchedCompanyId: vacancyId, matchedAt: serverTimestamp(), cvUrl: "" }
-          : { placementStatus: "matched",   matchedCompanyId: vacancyId, matchedAt: serverTimestamp() }
+          ? {
+              placementStatus: "confirmed",
+              matchedCompanyId: vacancyId,
+              matchedAt:       serverTimestamp(),
+              approvalMethod:  "auto",
+              tsReviewerId:    null,
+              tsReviewerName:  null,
+              approvedAt:      serverTimestamp(),
+              cvUrl: ""
+            }
+          : { placementStatus: "matched", matchedCompanyId: vacancyId, matchedAt: serverTimestamp() }
         );
       }
       newSlots[dept] = (newSlots[dept] || 0) - students.length;

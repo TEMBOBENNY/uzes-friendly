@@ -53,6 +53,40 @@ async function getGoogleToken(saEmail, saKeyPem) {
   return _gToken;
 }
 
+// FCM-scoped service-account token (separate cache — different OAuth scope)
+let _fcmToken = null, _fcmTokenExp = 0;
+async function getFCMToken(saEmail, saKeyPem) {
+  if (_fcmToken && Date.now() < _fcmTokenExp) return _fcmToken;
+  const now = Math.floor(Date.now() / 1000);
+  const header  = b64url({ alg: "RS256", typ: "JWT" });
+  const payload = b64url({
+    iss: saEmail, sub: saEmail,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now, exp: now + 3600,
+  });
+  const unsigned = `${header}.${payload}`;
+  const pem = saKeyPem.replace(/\\n/g, "\n");
+  const b64 = pem.replace(/-----[^-]+-----/g, "").replace(/\s/g, "");
+  const der = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey(
+    "pkcs8", der.buffer,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]
+  );
+  const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned));
+  const jwt = `${unsigned}.${b64url(new Uint8Array(sig))}`;
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error("FCM token exchange failed: " + JSON.stringify(data));
+  _fcmToken    = data.access_token;
+  _fcmTokenExp = Date.now() + 55 * 60 * 1000;
+  return _fcmToken;
+}
+
 // ── Firebase ID-token verification ─────────────────────────────────────────────
 // Every mutating endpoint (upload / library upload / delete) requires a valid,
 // unexpired Firebase ID token from a real signed-in UZES user. This is the gate
@@ -345,6 +379,10 @@ export default {
       return handleLibraryUpload(request, env, origin, url.origin);
     }
 
+    if (request.method === "POST" && url.pathname === "/push") {
+      return handlePush(request, env, origin);
+    }
+
     return new Response("Not found", { status: 404 });
   },
 };
@@ -378,10 +416,12 @@ async function handleUpload(request, env, origin, workerOrigin) {
       "image/jpeg","image/png","image/webp","image/gif","application/pdf",
       "text/csv","application/vnd.ms-excel",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ];
     const mime = file.type || "";
     if (mime && !allowed.includes(mime))
-      return json({ error: "Only JPG, PNG, WEBP, GIF or PDF files are accepted." }, 400, origin);
+      return json({ error: "Only JPG, PNG, WEBP, GIF, PDF, DOC, or DOCX files are accepted." }, 400, origin);
 
     // Magic-byte check: declared MIME must match actual file signature
     if (mime && !verifyMagicBytes(bytes, mime))
@@ -584,6 +624,52 @@ async function handleResetPassword(request, env, origin) {
     );
     const data = await res.json();
     if (!res.ok) return json({ error: data.error?.message || "Password reset failed" }, 500, origin);
+    return json({ ok: true }, 200, origin);
+  } catch (err) {
+    return json({ error: err.message }, 500, origin);
+  }
+}
+
+// ── FCM push notification ─────────────────────────────────────────────────────
+
+async function handlePush(request, env, origin) {
+  let user;
+  try { user = await requireUser(request, env); }
+  catch (e) { return json({ error: "Unauthorized — " + e.message }, 401, origin); }
+
+  const ip = request.headers.get("CF-Connecting-IP") || "";
+  if (!checkRate(ip, user.sub, 60, 60_000, 200, 3_600_000))
+    return json({ error: "Too many requests." }, 429, origin);
+
+  try {
+    const { to, title, body } = await request.json();
+    if (!to || !title) return json({ error: "Missing required fields: to, title" }, 400, origin);
+    if (!env.FIREBASE_SA_EMAIL || !env.FIREBASE_SA_KEY)
+      return json({ error: "Service account not configured" }, 500, origin);
+
+    const accessToken = await getFCMToken(env.FIREBASE_SA_EMAIL, env.FIREBASE_SA_KEY);
+    const res = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: {
+            token: to,
+            notification: { title: String(title), body: String(body || "") },
+            webpush: { fcm_options: { link: "/" } },
+          }
+        })
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      const msg = data.error?.message || "FCM send failed";
+      // Stale/invalid token — not our error, treat as silent success
+      if (msg.includes("UNREGISTERED") || msg.includes("INVALID_ARGUMENT"))
+        return json({ ok: true, skipped: true }, 200, origin);
+      return json({ error: msg }, 500, origin);
+    }
     return json({ ok: true }, 200, origin);
   } catch (err) {
     return json({ error: err.message }, 500, origin);

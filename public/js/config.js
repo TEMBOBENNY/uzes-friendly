@@ -19,6 +19,11 @@ export const UPLOAD_WORKER_URL = "https://uzes-upload.uzesofficial.workers.dev";
 // (readable only by executives) — NOT in this file.
 // Set them via Admin panel → System tab after deploying.
 
+// FCM VAPID key for web push — get from Firebase Console → Project settings →
+// Cloud Messaging → Web configuration → Generate key pair. Paste the public key here.
+// Leave "" to keep FCM off (no notification permission will be requested).
+export const FCM_VAPID_KEY = "BOyshAeGwjo5A-c17HGScSABtecfg5BdsgnuQPm5wJo_au9RTDkffONzUIcd5zcW3sgPmkftyGIK8ETVE44zKbE";
+
 // App Check (reCAPTCHA v3) site key — PUBLIC by design, safe to ship.
 // Get it from: Firebase Console → App Check → Apps → register your web app
 // with reCAPTCHA v3. Paste the SITE key here. Leave "" to keep App Check off.

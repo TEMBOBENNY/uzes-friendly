@@ -17,7 +17,7 @@
 
     .pay-card {
       border: 1px solid var(--line); border-radius: 10px;
-      padding: 16px; margin-bottom: 12px; background: #fff;
+      padding: 16px; margin-bottom: 12px; background: var(--card);
     }
     .pay-card-head {
       display: flex; justify-content: space-between; align-items: center;
@@ -52,6 +52,8 @@
       border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 14px;
     }
     .btn-reject:hover { background: #fae8e8; }
+    [data-theme="dark"] .btn-reject { background: #2d1a1a; border-color: #6e2525; }
+    [data-theme="dark"] .btn-reject:hover { background: #3a2020; }
     .reject-wrap {
       display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
     }
@@ -68,6 +70,7 @@
       padding: 9px 14px; border: 1px solid var(--line);
       background: #f5f7fa; border-radius: 8px; cursor: pointer; font-size: 13px;
     }
+    [data-theme="dark"] .btn-sm { background: #21262d; color: #c9d1d9; }
     .status-pill {
       color: #fff; font-size: 10px; font-weight: 800;
       padding: 3px 9px; border-radius: 20px; letter-spacing: .5px;
@@ -356,70 +359,107 @@
     <!-- ── Company Placements tab (Sec Gen, Vice Sec Gen, Admin) ──────── -->
     <div id="tab-placements" class="tab-panel hidden" style="margin-top:16px">
 
-      <div class="card">
-        <p class="section-head">Company Vacancies</p>
-        <div id="sgVacancyList">
-          <div class="sk sk-card" style="height:120px;margin-bottom:10px"></div>
-          <div class="sk sk-card" style="height:120px"></div>
+      <div class="ses-tabs">
+        <button class="ses-tab active" data-ses="sg-vacancies">Vacancies</button>
+        <button class="ses-tab" data-ses="sg-pending">Pending Review</button>
+        <button class="ses-tab" data-ses="sg-confirmed">Confirmed</button>
+      </div>
+
+      <!-- Vacancies panel -->
+      <div id="sg-vacancies" class="ses-panel">
+        <div class="card" style="margin-top:14px">
+          <p class="section-head">Company Vacancies</p>
+          <div id="sgVacancyList">
+            <div class="sk sk-card" style="height:120px;margin-bottom:10px"></div>
+            <div class="sk sk-card" style="height:120px"></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <p class="section-head">Add Company Vacancy</p>
+          <p class="muted small" style="margin-bottom:14px">
+            Create a vacancy for a company. Use <strong>Assign Now</strong> on any vacancy to automatically match eligible paid students by department, province, gender, and year of study.
+          </p>
+          <form id="sgAddVacancyForm">
+            <div class="fin-grid">
+              <div>
+                <label for="sgVacCompany">Company name</label>
+                <input id="sgVacCompany" required placeholder="e.g. Zesco Limited">
+              </div>
+              <div>
+                <label for="sgVacType">Placement type</label>
+                <select id="sgVacType">
+                  <option value="Attachment">Attachment (4th year &amp; below)</option>
+                  <option value="Internship">Internship (5th year)</option>
+                </select>
+              </div>
+              <div>
+                <label for="sgVacProvince">Province</label>
+                <select id="sgVacProvince">
+                  <option value="">— Select province —</option>
+                  <option>Central</option><option>Copperbelt</option><option>Eastern</option>
+                  <option>Luapula</option><option>Lusaka</option><option>Muchinga</option>
+                  <option>Northern</option><option>North-Western</option><option>Southern</option>
+                  <option>Western</option>
+                </select>
+              </div>
+              <div>
+                <label for="sgVacDistrict">District</label>
+                <input id="sgVacDistrict" required placeholder="e.g. Lusaka">
+              </div>
+              <div>
+                <label for="sgVacGender">Gender preference</label>
+                <select id="sgVacGender">
+                  <option value="All">All (no preference)</option>
+                  <option value="Male">Male only</option>
+                  <option value="Female">Female only</option>
+                </select>
+              </div>
+              <div>
+                <label for="sgVacAcceptMode">Accept mode</label>
+                <select id="sgVacAcceptMode">
+                  <option value="manual">Manual — student reviews &amp; accepts</option>
+                  <option value="auto">Auto — confirm immediately on match</option>
+                </select>
+              </div>
+              <div>
+                <label for="sgVacStartDate">Training start date</label>
+                <input type="date" id="sgVacStartDate">
+              </div>
+              <div>
+                <label for="sgVacEndDate">Training end date</label>
+                <input type="date" id="sgVacEndDate">
+              </div>
+            </div>
+            <p style="font-size:13px;font-weight:600;margin:14px 0 8px">Slots per department</p>
+            <div id="sgDeptSlotsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;margin-bottom:16px"></div>
+            <div class="fin-form-actions">
+              <button id="sgAddVacancyBtn" type="submit" class="btn-primary" style="width:auto;padding:10px 22px;margin:0">Add vacancy</button>
+              <p id="sgAddVacancyErr" class="error" style="margin:0"></p>
+              <p id="sgAddVacancyMsg" class="ok-msg" style="margin:0"></p>
+            </div>
+          </form>
         </div>
       </div>
 
-      <div class="card" style="margin-top:14px">
-        <p class="section-head">Add Company Vacancy</p>
-        <p class="muted small" style="margin-bottom:14px">
-          Create a vacancy for a company. Use <strong>Assign Now</strong> on any vacancy to automatically match eligible paid students by department, province, gender, and year of study.
-        </p>
-        <form id="sgAddVacancyForm">
-          <div class="fin-grid">
-            <div>
-              <label for="sgVacCompany">Company name</label>
-              <input id="sgVacCompany" required placeholder="e.g. Zesco Limited">
-            </div>
-            <div>
-              <label for="sgVacType">Placement type</label>
-              <select id="sgVacType">
-                <option value="Attachment">Attachment (4th year &amp; below)</option>
-                <option value="Internship">Internship (5th year)</option>
-              </select>
-            </div>
-            <div>
-              <label for="sgVacProvince">Province</label>
-              <select id="sgVacProvince">
-                <option value="">— Select province —</option>
-                <option>Central</option><option>Copperbelt</option><option>Eastern</option>
-                <option>Luapula</option><option>Lusaka</option><option>Muchinga</option>
-                <option>Northern</option><option>North-Western</option><option>Southern</option>
-                <option>Western</option>
-              </select>
-            </div>
-            <div>
-              <label for="sgVacDistrict">District</label>
-              <input id="sgVacDistrict" required placeholder="e.g. Lusaka">
-            </div>
-            <div>
-              <label for="sgVacGender">Gender preference</label>
-              <select id="sgVacGender">
-                <option value="All">All (no preference)</option>
-                <option value="Male">Male only</option>
-                <option value="Female">Female only</option>
-              </select>
-            </div>
-            <div>
-              <label for="sgVacAcceptMode">Accept mode</label>
-              <select id="sgVacAcceptMode">
-                <option value="manual">Manual — student reviews &amp; accepts</option>
-                <option value="auto">Auto — confirm immediately on match</option>
-              </select>
-            </div>
-          </div>
-          <p style="font-size:13px;font-weight:600;margin:14px 0 8px">Slots per department</p>
-          <div id="sgDeptSlotsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;margin-bottom:16px"></div>
-          <div class="fin-form-actions">
-            <button id="sgAddVacancyBtn" type="submit" class="btn-primary" style="width:auto;padding:10px 22px;margin:0">Add vacancy</button>
-            <p id="sgAddVacancyErr" class="error" style="margin:0"></p>
-            <p id="sgAddVacancyMsg" class="ok-msg" style="margin:0"></p>
-          </div>
-        </form>
+      <!-- Pending Review panel -->
+      <div id="sg-pending" class="ses-panel hidden" style="margin-top:14px">
+        <p class="muted small" style="margin-bottom:14px">Students who accepted a vacancy under manual review mode. Approve to confirm their placement and send the letter, or reject to return them to pending (no rejection penalty).</p>
+        <div id="sgTsReviewList">
+          <p class="muted small">Loading…</p>
+        </div>
+      </div>
+
+      <!-- Confirmed Placements panel -->
+      <div id="sg-confirmed" class="ses-panel hidden" style="margin-top:14px">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap">
+          <button id="sgResetConfirmedBtn" class="btn-danger-sm">Reset all confirmed</button>
+          <p id="sgResetConfirmedMsg" class="ok-msg"></p>
+        </div>
+        <div id="sgConfirmedList">
+          <div class="sk sk-card" style="height:110px;margin-bottom:12px"></div>
+          <div class="sk sk-card" style="height:110px"></div>
+        </div>
       </div>
 
     </div>

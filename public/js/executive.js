@@ -11,6 +11,7 @@ import {
   reauthenticateWithCredential, EmailAuthProvider, updatePassword
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { ORG, UPLOAD_WORKER_URL } from "./config.js";
+import { sendPush } from "./fcm.js";
 
 // Relay config loaded once from Firestore (not in source code)
 let _relayConfig = null;
@@ -385,6 +386,13 @@ window.confirmPayment = async (payId) => {
       pendingList.innerHTML = "<p class='muted'>No pending payments.</p>";
     }
     if (allLoaded) loadAll();   // only refresh the All-payments tab if it's been opened
+
+    if (p.studentUid) {
+      getDoc(doc(db, "students", p.studentUid)).then(snap => {
+        const tok = snap.data()?.fcmToken;
+        if (tok) sendPush(tok, "Payment Confirmed", `Your ${p.category} payment of K${p.amount} has been approved.`);
+      }).catch(() => {});
+    }
   } catch (err) {
     errEl.textContent = "Error: " + err.message;
     btn.disabled = false; btn.textContent = "✓ Confirm payment";
@@ -451,6 +459,13 @@ window.confirmReject = async (payId) => {
       pendingList.innerHTML = "<p class='muted'>No pending payments.</p>";
     }
     if (allLoaded) loadAll();   // only refresh the All-payments tab if it's been opened
+
+    if (p.studentUid) {
+      getDoc(doc(db, "students", p.studentUid)).then(snap => {
+        const tok = snap.data()?.fcmToken;
+        if (tok) sendPush(tok, "Payment Not Approved", `Your ${p.category} payment was not approved. Reason: ${reason}`);
+      }).catch(() => {});
+    }
   } catch (err) { errEl.textContent = "Error: " + err.message; }
 };
 
@@ -1423,6 +1438,7 @@ export function initVerifyScanner() {
       },
       () => {}
     ).catch(err => {
+      scanner = null; // never started — prevent closeModal() from calling stop() on a dead scanner
       resultEl.innerHTML = `<p class="error">Camera error: ${err}.<br>Grant camera permission and try again.</p>`;
     });
   }
@@ -1458,6 +1474,21 @@ function sgEsc(s) {
 function initSGPlacements() {
   sgInitDeptGrid();
   sgLoadVacancies();
+
+  // Wire ses-tabs: Vacancies | Pending Review | Confirmed
+  const sgTabs   = document.querySelectorAll('#tab-placements .ses-tab');
+  const sgPanels = document.querySelectorAll('#tab-placements .ses-panel');
+  let _sgPendingLoaded = false, _sgConfirmedLoaded = false;
+  sgTabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.ses;
+      sgTabs.forEach(t   => t.classList.toggle('active', t.dataset.ses === target));
+      sgPanels.forEach(p => p.classList.toggle('hidden', p.id !== target));
+      if (target === 'sg-pending'   && !_sgPendingLoaded)   { _sgPendingLoaded   = true; sgLoadTSReview(); }
+      if (target === 'sg-confirmed' && !_sgConfirmedLoaded) { _sgConfirmedLoaded = true; sgLoadConfirmedPlacements(); }
+    });
+  });
+
   const form = document.getElementById("sgAddVacancyForm");
   if (!form) return;
   form.addEventListener("submit", async e => {
@@ -1492,6 +1523,8 @@ function initSGPlacements() {
         district,
         genderPreference: document.getElementById("sgVacGender").value,
         acceptMode:       document.getElementById("sgVacAcceptMode").value,
+        startDate:        document.getElementById("sgVacStartDate").value || "",
+        endDate:          document.getElementById("sgVacEndDate").value   || "",
         departmentsRequired,
         slotsRemaining,
         status:           "open",
@@ -1552,6 +1585,7 @@ function sgRenderVacancyCard(id, v) {
           <span class="pay-detail"><span class="detail-label">Type</span>${sgEsc(v.type)}</span>
           <span class="pay-detail"><span class="detail-label">Gender pref</span>${sgEsc(v.genderPreference || "All")}</span>
           <span class="pay-detail"><span class="detail-label">Accept mode</span>${v.acceptMode === "auto" ? "Auto-confirm" : "Manual review"}</span>
+          ${v.startDate ? `<span class="pay-detail"><span class="detail-label">Period</span>${sgEsc(v.startDate)} → ${sgEsc(v.endDate || "—")}</span>` : ""}
           ${deptLines ? `<span class="pay-detail"><span class="detail-label">Slots</span><span style="font-size:11px">${deptLines}</span></span>` : ""}
         </div>
       </div>
@@ -1603,3 +1637,214 @@ window.sgDeleteVacancy = async (vacancyId) => {
     alert("Delete failed: " + err.message);
   }
 };
+
+// ── SG Pending Review ─────────────────────────────────────────────────────────
+async function sgLoadTSReview() {
+  const list = document.getElementById("sgTsReviewList");
+  if (!list) return;
+  list.innerHTML = "<p class='muted small'>Loading…</p>";
+  try {
+    const snap = await getDocs(
+      query(collection(db, "placements"), where("placementStatus", "==", "awaiting_ts_approval"))
+    );
+    if (snap.empty) { list.innerHTML = "<p class='muted small'>No placements awaiting review.</p>"; return; }
+    const vacancyIds = [...new Set(snap.docs.map(d => d.data().matchedCompanyId).filter(Boolean))];
+    const vacancyMap = {};
+    await Promise.all(vacancyIds.map(async id => {
+      const v = await getDoc(doc(db, "vacancies", id));
+      if (v.exists()) vacancyMap[id] = v.data();
+    }));
+    const cards = await Promise.all(snap.docs.map(async d => {
+      const placement = d.data();
+      const uid = d.id;
+      let student = {};
+      try { const s = await getDoc(doc(db, "students", uid)); if (s.exists()) student = s.data(); } catch (_) {}
+      const company = vacancyMap[placement.matchedCompanyId] || {};
+      const cvLink = placement.cvUrl
+        ? `<a href="${sgEsc(placement.cvUrl)}" target="_blank" class="btn-ghost" style="font-size:12px;padding:7px 14px;text-decoration:none;display:inline-flex;align-items:center;gap:4px">📄 REVIEW CV</a>`
+        : "";
+      return `<div class="req-card" style="margin-bottom:10px">
+        <div class="req-card-head">
+          <div>
+            <div class="req-name">${sgEsc(student.name || uid)}</div>
+            <div class="req-meta">
+              <span>${sgEsc(student.compNumber || "")} · ${sgEsc(student.department || "")} · Year ${sgEsc(student.yearOfStudy || "?")}</span>
+              <span>Company: <strong>${sgEsc(company.companyName || placement.matchedCompanyId)}</strong> · ${sgEsc(company.province || "")} · ${sgEsc(company.type || "")}</span>
+            </div>
+          </div>
+          <span class="status-pill" style="background:#e67e22">AWAITING REVIEW</span>
+        </div>
+        ${cvLink ? `<div style="display:flex;justify-content:flex-end;padding:6px 0 4px">${cvLink}</div>` : ""}
+        <div class="req-actions">
+          <button class="btn-approve" id="sg-ts-approve-${uid}" onclick="sgApprovePlacement('${uid}')">Approve &amp; Send Letter</button>
+          <button class="btn-danger-sm" id="sg-ts-reject-${uid}" onclick="sgRejectPlacement('${uid}')">Reject (no penalty)</button>
+          <p id="sg-ts-err-${uid}" class="action-err" style="width:100%;margin:4px 0 0"></p>
+        </div>
+      </div>`;
+    }));
+    list.innerHTML = cards.join("");
+  } catch (err) {
+    list.innerHTML = `<p class='error'>Failed to load: ${err.message}</p>`;
+  }
+}
+
+window.sgApprovePlacement = async (uid) => {
+  const btn   = document.getElementById(`sg-ts-approve-${uid}`);
+  const errEl = document.getElementById(`sg-ts-err-${uid}`);
+  if (btn) { btn.disabled = true; btn.textContent = "Approving…"; }
+  if (errEl) errEl.textContent = "";
+  try {
+    const placementSnap = await getDoc(doc(db, "placements", uid));
+    if (!placementSnap.exists()) throw new Error("Placement not found.");
+    const placement = placementSnap.data();
+    const [studentSnap, companySnap, templSnap, relaySnap] = await Promise.all([
+      getDoc(doc(db, "students", uid)),
+      getDoc(doc(db, "vacancies", placement.matchedCompanyId)),
+      getDoc(doc(db, "siteContent", "placementLetterTemplates")),
+      getDoc(doc(db, "settings", "emailRelay"))
+    ]);
+    const student = studentSnap.exists() ? studentSnap.data() : {};
+    const company = companySnap.exists() ? companySnap.data() : {};
+    const { url, token } = relaySnap.exists() ? relaySnap.data() : {};
+    if (!url) throw new Error("Email relay not configured.");
+    let templateDocUrl = "";
+    if (templSnap.exists()) {
+      const t = templSnap.data();
+      templateDocUrl = company.type === "Internship" ? (t.internshipDocUrl || "") : (t.attachmentDocUrl || "");
+    }
+    await fetch(url, {
+      method: "POST", mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        _token: token || "", type: "placement_letter",
+        to: student.email || "", studentName: student.name || "",
+        studentNumber: student.compNumber || "", department: student.department || "",
+        yearOfStudy: student.yearOfStudy || "", gender: student.gender || "",
+        phone: placement.phone || student.phone || "",
+        companyName: company.companyName || "", province: company.province || "",
+        district: company.district || "", placementType: company.type || "",
+        templateDocUrl, customFields: placement.customFields || {}
+      })
+    });
+    await updateDoc(doc(db, "placements", uid), {
+      placementStatus: "confirmed",
+      approvalMethod:  "manual",
+      tsReviewerId:    currentUser.uid,
+      tsReviewerName:  currentProfile.name || currentUser.email || "",
+      approvedAt:      serverTimestamp(),
+      cvUrl: ""
+    });
+    if (student.fcmToken) sendPush(student.fcmToken, "Placement Confirmed!", `Your ${company.type || "industrial"} placement at ${company.companyName || "a company"} has been confirmed.`);
+    sgLoadTSReview();
+    sgLoadVacancies();
+  } catch (err) {
+    if (errEl) errEl.textContent = err.message;
+    if (btn)   { btn.disabled = false; btn.textContent = "Approve & Send Letter"; }
+  }
+};
+
+window.sgRejectPlacement = async (uid) => {
+  if (!confirm("Return this student to pending? They will NOT receive a rejection penalty and can be matched again.")) return;
+  const btn   = document.getElementById(`sg-ts-reject-${uid}`);
+  const errEl = document.getElementById(`sg-ts-err-${uid}`);
+  if (btn) { btn.disabled = true; btn.textContent = "Rejecting…"; }
+  if (errEl) errEl.textContent = "";
+  try {
+    const placementSnap = await getDoc(doc(db, "placements", uid));
+    if (!placementSnap.exists()) throw new Error("Placement not found.");
+    const placement = placementSnap.data();
+    // Restore the slot for the student's own department
+    const studentSnap = await getDoc(doc(db, "students", uid));
+    const dept = studentSnap.exists() ? studentSnap.data().department : null;
+    if (dept && placement.matchedCompanyId) {
+      const vacRef = doc(db, "vacancies", placement.matchedCompanyId);
+      const vacSnap = await getDoc(vacRef);
+      if (vacSnap.exists()) {
+        const slots = { ...vacSnap.data().slotsRemaining };
+        slots[dept] = (slots[dept] || 0) + 1;
+        await updateDoc(vacRef, { slotsRemaining: slots });
+      }
+    }
+    await updateDoc(doc(db, "placements", uid), {
+      placementStatus: "pending",
+      matchedCompanyId: null, matchedAt: null, customFields: null
+    });
+    sgLoadTSReview();
+    sgLoadVacancies();
+  } catch (err) {
+    if (errEl) errEl.textContent = err.message;
+    if (btn)   { btn.disabled = false; btn.textContent = "Reject (no penalty)"; }
+  }
+};
+
+// ── SG Confirmed Placements ───────────────────────────────────────────────────
+async function sgLoadConfirmedPlacements() {
+  const list = document.getElementById("sgConfirmedList");
+  if (!list) return;
+  list.innerHTML = "<p class='muted'>Loading…</p>";
+
+  const resetBtn = document.getElementById("sgResetConfirmedBtn");
+  if (resetBtn) {
+    resetBtn.onclick = async () => {
+      if (!confirm("Reset ALL confirmed placements back to pending?\n\nThis cannot be undone.")) return;
+      const msg = document.getElementById("sgResetConfirmedMsg");
+      msg.textContent = "Resetting…"; msg.style.color = "var(--muted)";
+      try {
+        const snap = await getDocs(query(collection(db, "placements"), where("placementStatus", "==", "confirmed")));
+        const batch = writeBatch(db);
+        snap.docs.forEach(d => batch.update(d.ref, {
+          placementStatus: "pending",
+          matchedCompanyId: null, matchedAt: null,
+          approvalMethod: null, tsReviewerId: null,
+          tsReviewerName: null, approvedAt: null, cvUrl: null
+        }));
+        await batch.commit();
+        list.innerHTML = "<p class='muted'>No confirmed placements yet.</p>";
+        msg.style.color = "var(--ok)"; msg.textContent = "All placements reset to pending.";
+        setTimeout(() => { msg.textContent = ""; }, 4000);
+      } catch (err) {
+        msg.style.color = "var(--danger)"; msg.textContent = err.message;
+      }
+    };
+  }
+
+  try {
+    const snap = await getDocs(query(collection(db, "placements"), where("placementStatus", "==", "confirmed")));
+    if (snap.empty) { list.innerHTML = "<p class='muted'>No confirmed placements yet.</p>"; return; }
+    const docs = snap.docs.slice().sort((a, b) => (b.data().approvedAt?.seconds ?? 0) - (a.data().approvedAt?.seconds ?? 0));
+    const vacancyIds = [...new Set(docs.map(d => d.data().matchedCompanyId).filter(Boolean))];
+    const vacancyMap = {};
+    await Promise.all(vacancyIds.map(async id => {
+      const v = await getDoc(doc(db, "vacancies", id));
+      if (v.exists()) vacancyMap[id] = v.data();
+    }));
+    const cards = await Promise.all(docs.map(async d => {
+      const p = d.data(); const uid = d.id;
+      let student = {};
+      try { const s = await getDoc(doc(db, "students", uid)); if (s.exists()) student = s.data(); } catch (_) {}
+      const company = vacancyMap[p.matchedCompanyId] || {};
+      const date = p.approvedAt?.toDate().toLocaleDateString("en-ZM", { day:"2-digit", month:"short", year:"numeric" }) || "—";
+      const methodBadge = p.approvalMethod === "auto"
+        ? `<span class="status-pill" style="background:#2563eb">AUTO</span>`
+        : `<span class="status-pill" style="background:#1e8a4c">MANUAL</span>`;
+      const reviewer = p.approvalMethod === "manual" && p.tsReviewerName
+        ? `<span>Reviewed by: <strong>${sgEsc(p.tsReviewerName)}</strong></span>` : "";
+      return `<div class="req-card" style="margin-bottom:10px">
+        <div class="req-card-head">
+          <div>
+            <div class="req-name">${sgEsc(student.name || uid)}</div>
+            <div class="req-meta">
+              <span>${sgEsc(student.compNumber || "")} · ${sgEsc(student.department || "")} · Year ${sgEsc(student.yearOfStudy || "?")}</span>
+              <span>Company: <strong>${sgEsc(company.companyName || p.matchedCompanyId || "—")}</strong> · ${sgEsc(company.province || "")} · ${sgEsc(company.type || "")}</span>
+              ${reviewer}<span>Confirmed: ${date}</span>
+            </div>
+          </div>
+          ${methodBadge}
+        </div>
+      </div>`;
+    }));
+    list.innerHTML = cards.join("");
+  } catch (err) {
+    list.innerHTML = `<p class='error'>Failed to load: ${err.message}</p>`;
+  }
+}
