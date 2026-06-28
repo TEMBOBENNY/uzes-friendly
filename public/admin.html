@@ -286,10 +286,13 @@
           placeholder="Paste the secret you set in Cloudflare" style="margin-bottom:4px">
         <p id="adminApiErr" class="error" style="margin-top:4px;min-height:18px"></p>
         <p id="adminApiOk" style="color:var(--ok);font-size:13px;font-weight:600;margin-top:2px;min-height:18px"></p>
-        <div class="form-actions">
+        <div class="form-actions" style="display:flex;gap:8px;flex-wrap:wrap">
           <button id="saveAdminApiBtn" type="button" class="btn-primary"
             style="width:auto;padding:10px 22px;margin-top:6px">Save</button>
+          <button id="testAdminApiBtn" type="button" class="btn-ghost"
+            style="width:auto;padding:10px 18px;margin-top:6px">Test secret</button>
         </div>
+        <p id="testAdminApiResult" style="font-size:13px;font-weight:600;margin-top:8px;min-height:18px"></p>
       </div>
 
       <!-- Industrial Training Secretary account -->

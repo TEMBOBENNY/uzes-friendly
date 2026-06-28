@@ -31,22 +31,30 @@ function getDashGreeting() {
 
 function renderTSDash() {
   const dc = document.getElementById("dashContent");
-  if (!dc || dc.dataset.loaded) return;
+  if (!dc) return;
   dc.dataset.loaded = "1";
-  const name = _profile?.name || "Secretary";
+  const name = _profile?.name || _user?.email || "Secretary";
   dc.innerHTML = `
-    <div class="card" style="margin-bottom:14px;background:var(--primary);color:#fff;padding:20px 22px">
-      <div style="font-size:18px;font-weight:700">${getDashGreeting()}, ${esc(name)}.</div>
-      <div style="font-size:14px;margin-top:4px;opacity:.85">Industrial Training Secretary &nbsp;·&nbsp; Here's your role overview.</div>
+    <div style="margin-bottom:14px;background:var(--green);color:#fff;padding:22px 24px;border-radius:14px;box-shadow:0 4px 14px rgba(0,85,165,.15)">
+      <div style="font-size:20px;font-weight:800;color:#fff">${getDashGreeting()}, ${esc(name)}.</div>
+      <div style="font-size:14px;margin-top:6px;color:#dbeafe">Industrial Training Secretary &nbsp;·&nbsp; Here's your role overview.</div>
     </div>
-    <div class="card" style="padding:20px 22px">
-      <div style="font-size:15px;font-weight:700;margin-bottom:12px">What you can do</div>
-      <ul style="margin:0;padding-left:18px;line-height:1.8;font-size:14px;color:var(--muted)">
-        <li>Control the attachment/internship session — open or close applications</li>
-        <li>Review and approve student attachment letter requests</li>
+    <div class="card" style="padding:20px 22px;margin-bottom:12px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px;color:var(--text)">Industrial Training Secretary duties</div>
+      <ul style="margin:0;padding-left:18px;line-height:1.8;font-size:14px;color:var(--text)">
+        <li>Open and close the attachment / internship application session</li>
+        <li>Review and approve pending attachment letter requests</li>
         <li>Approve or reject student placement confirmations (manual mode)</li>
         <li>Manage the placement letter template and custom placeholders</li>
-        <li>View and track all confirmed placements</li>
+        <li>Track all confirmed placements and reset student records when needed</li>
+      </ul>
+    </div>
+    <div class="card" style="padding:20px 22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px;color:var(--text)">As an executive you can also</div>
+      <ul style="margin:0;padding-left:18px;line-height:1.8;font-size:14px;color:var(--text)">
+        <li>View pending payments and the full payments history</li>
+        <li>Verify receipts via the QR scanner</li>
+        <li>Update your profile signature and account settings</li>
       </ul>
     </div>`;
 }
@@ -88,16 +96,18 @@ protect(["executive", "admin"], async (user, profile) => {
 
 
   initSubHero(user, profile, { page: "secretary", active: "tab-dash", tabs: secretaryTabs() });
+  renderTSDash();   // explicit render so the dashboard never relies on shOnTab timing
 
   await initSession();
 });
 
 // Lazy-load each tab the first time the sub-hero reveals it.
-const loaded = new Set(["tab-dash"]);
+const loaded = new Set();
 window.shOnTab = (id) => {
+  // Dashboard re-renders cheaply on every visit — no guard needed
+  if (id === "tab-dash") { renderTSDash(); return; }
   if (loaded.has(id)) return;
   loaded.add(id);
-  if (id === "tab-dash") { renderTSDash(); return; }
   if (id === "tab-pending") {
     loadPending();
     // Eagerly load placements so data is ready when the sub-tab is clicked

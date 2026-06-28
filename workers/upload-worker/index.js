@@ -375,6 +375,10 @@ export default {
       return handleResetPassword(request, env, origin);
     }
 
+    if (request.method === "POST" && url.pathname === "/admin/test-secret") {
+      return handleTestSecret(request, env, origin);
+    }
+
     if (request.method === "POST" && url.pathname === "/library/upload") {
       return handleLibraryUpload(request, env, origin, url.origin);
     }
@@ -595,6 +599,25 @@ async function handleDeleteAuthUser(request, env, origin) {
     if (!res.ok) return json({ error: data.error?.message || "Firebase delete failed" }, 500, origin);
     const realErrors = (data.errors || []).filter(e => e.message !== "USER_NOT_FOUND");
     if (realErrors.length) return json({ error: realErrors[0].message }, 500, origin);
+    return json({ ok: true }, 200, origin);
+  } catch (err) {
+    return json({ error: err.message }, 500, origin);
+  }
+}
+
+// ── Test the admin secret without any destructive action ─────────────────────
+// Used by the System tab "Test secret" button to confirm Firestore secret
+// matches the Worker's ADMIN_DELETE_SECRET env var.
+async function handleTestSecret(request, env, origin) {
+  const ip = request.headers.get("CF-Connecting-IP") || "";
+  if (!checkRate(ip, null, 20, 3_600_000, null, 0))
+    return json({ error: "Too many requests." }, 429, origin);
+  try {
+    const { token } = await request.json();
+    if (!env.ADMIN_DELETE_SECRET)
+      return json({ error: "ADMIN_DELETE_SECRET not set on Worker" }, 500, origin);
+    if (token !== env.ADMIN_DELETE_SECRET)
+      return json({ error: "Secret does not match" }, 401, origin);
     return json({ ok: true }, 200, origin);
   } catch (err) {
     return json({ error: err.message }, 500, origin);

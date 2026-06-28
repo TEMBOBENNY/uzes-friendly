@@ -1,6 +1,12 @@
-// FCM push notifications.
-// registerFCMToken: call once after student login to request permission + store token.
-// sendPush: fire-and-forget from exec/TS pages when approving payments/letters/placements.
+// Push notifications — dual-mode.
+//   On the web: uses Firebase JS SDK web push (Notification API + service worker).
+//   On the Capacitor Android app: uses @capacitor/push-notifications (native FCM).
+//
+// Public API:
+//   registerFCMToken(uid, collection) — call once after login. Asks permission
+//                                       (with custom in-app prompt first) and
+//                                       stores the device token in Firestore.
+//   sendPush(fcmToken, title, body)   — fire-and-forget for execs sending pushes.
 
 import { app, auth, db } from "./firebase.js";
 import { getMessaging, getToken, onMessage }
@@ -12,12 +18,16 @@ import { FCM_VAPID_KEY, UPLOAD_WORKER_URL } from "./config.js";
 let _messaging = null;
 let _registered = false;
 
+function isNative() {
+  return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+}
+
 function getMsg() {
   if (!_messaging) _messaging = getMessaging(app);
   return _messaging;
 }
 
-// Show a friendly bottom-sheet before the native OS dialog fires.
+// Friendly bottom-sheet shown before the OS-level permission dialog.
 // Returns true if the user tapped "Allow", false for "Not Now".
 function showNotifPrompt() {
   return new Promise(resolve => {
@@ -38,7 +48,7 @@ function showNotifPrompt() {
           or your placement is finalised.
         </div>
         <button id="_notifAllow"
-          style="width:100%;padding:13px;background:var(--primary,#2563eb);color:#fff;
+          style="width:100%;padding:13px;background:var(--green,#0055a5);color:#fff;
                  border:none;border-radius:10px;font-size:15px;font-weight:600;
                  cursor:pointer;margin-bottom:10px">
           Allow Notifications
@@ -59,7 +69,90 @@ function showNotifPrompt() {
   });
 }
 
-async function _doRegister(uid, collection) {
+// ── Native (Capacitor Android) push registration ─────────────────────────────
+async function registerNative(uid, collection) {
+  const PushNotifications = window.Capacitor?.Plugins?.PushNotifications;
+  if (!PushNotifications) {
+    console.warn("PushNotifications plugin not installed. Run: npm install @capacitor/push-notifications && npx cap sync android");
+    return;
+  }
+  try {
+    const perm = await PushNotifications.checkPermissions();
+    let granted = perm.receive === "granted";
+
+    if (!granted) {
+      if (perm.receive === "denied") return;       // OS-level deny
+      if (localStorage.getItem("uzes_notif_asked") === "dismissed") return;
+
+      await new Promise(r => setTimeout(r, 1500));
+      const allowed = await showNotifPrompt();
+      if (!allowed) {
+        localStorage.setItem("uzes_notif_asked", "dismissed");
+        return;
+      }
+      const req = await PushNotifications.requestPermissions();
+      granted = req.receive === "granted";
+      if (!granted) return;
+    }
+
+    // Listen BEFORE calling register() — registration fires the listener.
+    PushNotifications.addListener("registration", async (tokenObj) => {
+      const token = tokenObj.value || tokenObj.token;
+      if (!token) return;
+      _registered = true;
+      try {
+        await updateDoc(doc(db, collection, uid), { fcmToken: token });
+      } catch (e) { console.warn("Token save:", e.message); }
+    });
+
+    PushNotifications.addListener("registrationError", (err) => {
+      console.warn("Native push registration error:", err?.error || err);
+    });
+
+    PushNotifications.addListener("pushNotificationReceived", (notification) => {
+      // App in foreground — show an in-app toast since the system notification is suppressed.
+      const title = notification.title || "UZES";
+      const body  = notification.body  || "";
+      if (typeof window.showToast === "function") {
+        window.showToast({ type: "info", title, message: body });
+      }
+    });
+
+    await PushNotifications.register();
+  } catch (err) {
+    console.warn("Native push setup:", err.message);
+  }
+}
+
+// ── Web (browser) push registration ──────────────────────────────────────────
+async function registerWeb(uid, collection) {
+  if (!("Notification" in window)) return;
+  const perm = Notification.permission;
+
+  // Already granted — silently re-register
+  if (perm === "granted") {
+    await _doWebRegister(uid, collection);
+    return;
+  }
+  if (perm === "denied") return;
+  if (localStorage.getItem("uzes_notif_asked") === "dismissed") return;
+
+  await new Promise(r => setTimeout(r, 1500));
+  const allowed = await showNotifPrompt();
+  if (!allowed) {
+    localStorage.setItem("uzes_notif_asked", "dismissed");
+    return;
+  }
+  try {
+    const granted = await Notification.requestPermission();
+    if (granted !== "granted") return;
+    await _doWebRegister(uid, collection);
+  } catch (err) {
+    console.warn("Web push permission:", err.message);
+  }
+}
+
+async function _doWebRegister(uid, collection) {
   try {
     const messaging = getMsg();
     const token = await getToken(messaging, { vapidKey: FCM_VAPID_KEY });
@@ -74,44 +167,16 @@ async function _doRegister(uid, collection) {
       }
     });
   } catch (err) {
-    console.warn("FCM token:", err.message);
+    console.warn("Web push token:", err.message);
   }
 }
 
+// ── Public entry point ──────────────────────────────────────────────────────
 export async function registerFCMToken(uid, collection) {
-  if (!FCM_VAPID_KEY || _registered || !("Notification" in window)) return;
-
-  const perm = Notification.permission;
-
-  // Already granted on a previous visit — silently re-register the token.
-  if (perm === "granted") {
-    return _doRegister(uid, collection);
-  }
-
-  // OS-level deny — cannot ask again without the user visiting Settings.
-  if (perm === "denied") return;
-
-  // Check if we've already shown our custom prompt on this device.
-  const alreadyAsked = localStorage.getItem("uzes_notif_asked");
-  if (alreadyAsked === "dismissed") return;
-
-  // Wait 1.5 s so the page is settled before the prompt appears.
-  await new Promise(r => setTimeout(r, 1500));
-
-  const allowed = await showNotifPrompt();
-  if (!allowed) {
-    localStorage.setItem("uzes_notif_asked", "dismissed");
-    return;
-  }
-
-  // User tapped "Allow" → trigger native OS permission dialog.
-  try {
-    const granted = await Notification.requestPermission();
-    if (granted !== "granted") return;
-    await _doRegister(uid, collection);
-  } catch (err) {
-    console.warn("FCM setup:", err.message);
-  }
+  if (_registered) return;
+  if (isNative()) return registerNative(uid, collection);
+  if (!FCM_VAPID_KEY) return;
+  return registerWeb(uid, collection);
 }
 
 export async function sendPush(fcmToken, title, body) {

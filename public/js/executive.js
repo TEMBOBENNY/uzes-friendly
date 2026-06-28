@@ -66,6 +66,7 @@ protect(["executive", "admin"], (user, profile) => {
     active,
     tabs: executiveTabs({ content: isContentMgr, activities: isActivitiesMgr, library: isLibrarian, placements: isPlacementMgr })
   });
+  renderExecDash();      // explicit render so the dashboard never relies on shOnTab timing
 
   loadPending();         // default visible tab only
   initSignature();       // reads cached profile — no query
@@ -82,69 +83,78 @@ function getDashGreeting() {
   return "Good evening";
 }
 
+// Position-specific duties (read directly from rules + UI capabilities).
 const ROLE_DESCS = {
   "Chairperson": [
     "Lead executive committee meetings and set the agenda",
-    "Represent UZES in official capacity and external engagements",
-    "Confirm payments, manage finances, and oversee all operations",
-    "Manage public content, activities, and member communications",
+    "Manage public website content — announcements and about pages",
+    "Represent UZES in official engagements",
   ],
   "Vice Chairperson": [
     "Support the Chairperson and stand in during absence",
-    "Confirm payments and help oversee financial records",
-    "Assist with public content and member management",
+    "Assist with committee coordination and member affairs",
   ],
   "Treasurer": [
     "Confirm student payments and generate official receipts",
     "Record income and expenses in the Finances ledger",
-    "Generate financial reports for committee review",
-  ],
-  "Industrial Training Secretary": [
-    "Control the attachment/internship application session (open/close)",
-    "Review and approve student attachment letter requests",
-    "Approve or reject student placement confirmations",
-    "Manage the placement letter template and custom placeholders",
-    "View and track all confirmed placements",
+    "Reject invalid payment proofs with reason notes",
   ],
   "Secretary General": [
     "Create and manage company vacancies for student placements",
     "Run the matching algorithm to assign students to companies",
-    "Review and approve pending placement confirmations",
-    "Monitor all confirmed placements across departments",
+    "Review and approve manual-mode placement confirmations",
+    "Moderate the Library — uploads, edits, and course management",
   ],
   "Vice Secretary General": [
     "Assist the Secretary General with vacancy management",
-    "Monitor and review student placement confirmations",
-    "Manage the Library — upload, moderate, and organise resources",
+    "Review and approve manual-mode placement confirmations",
+    "Moderate the Library — uploads, edits, and course management",
   ],
   "Information and Publicity Secretary": [
     "Manage public website content — announcements, about pages",
     "Post and edit society activities and events",
-    "Represent UZES in communications and social media",
+    "Handle external communications and social media",
   ],
   "Social and Cultural Secretary": [
     "Organise social events and cultural activities",
     "Post activities and events on the public website",
   ],
+  "Committee Member": [
+    "Support the executive committee on assigned tasks",
+    "Attend committee meetings and contribute to decisions",
+  ],
 };
+
+const COMMON_EXEC = [
+  "View pending payments and the full payments history",
+  "Verify receipts via the QR scanner",
+  "Update your profile signature and account settings",
+];
 
 function renderExecDash() {
   const dc = document.getElementById("dashContent");
-  if (!dc || dc.dataset.loaded) return;
+  if (!dc) return;
   dc.dataset.loaded = "1";
   const pos = currentProfile?.position || "";
-  const name = currentProfile?.name || "Executive";
+  const name = currentProfile?.name || currentUser?.email || "Executive";
   const greeting = getDashGreeting();
-  const bullets = ROLE_DESCS[pos] || ["Manage payments, view reports, and assist society operations."];
+  const bullets = ROLE_DESCS[pos] || [];
   dc.innerHTML = `
-    <div class="card" style="margin-bottom:14px;background:var(--primary);color:#fff;padding:20px 22px">
-      <div style="font-size:18px;font-weight:700">${greeting}, ${esc(name)}.</div>
-      <div style="font-size:14px;margin-top:4px;opacity:.85">${esc(pos || "Executive")} &nbsp;·&nbsp; Here's your role overview.</div>
+    <div style="margin-bottom:14px;background:var(--green);color:#fff;padding:22px 24px;border-radius:14px;box-shadow:0 4px 14px rgba(0,85,165,.15)">
+      <div style="font-size:20px;font-weight:800;color:#fff">${greeting}, ${esc(name)}.</div>
+      <div style="font-size:14px;margin-top:6px;color:#dbeafe">${esc(pos || "Executive")} &nbsp;·&nbsp; Here's your role overview.</div>
     </div>
-    <div class="card" style="padding:20px 22px">
-      <div style="font-size:15px;font-weight:700;margin-bottom:12px">What you can do</div>
-      <ul style="margin:0;padding-left:18px;line-height:1.8;font-size:14px;color:var(--muted)">
+    ${bullets.length ? `
+    <div class="card" style="padding:20px 22px;margin-bottom:12px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px;color:var(--text)">${esc(pos)} duties</div>
+      <ul style="margin:0;padding-left:18px;line-height:1.8;font-size:14px;color:var(--text)">
         ${bullets.map(b => `<li>${esc(b)}</li>`).join("")}
+      </ul>
+    </div>` : ""}
+    <div class="card" style="padding:20px 22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px;color:var(--text)">As an executive you can also</div>
+      <ul style="margin:0;padding-left:18px;line-height:1.8;font-size:14px;color:var(--text)">
+        ${COMMON_EXEC.map(b => `<li>${esc(b)}</li>`).join("")}
       </ul>
     </div>`;
 }

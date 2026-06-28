@@ -56,10 +56,13 @@ async function getAdminDeleteToken() {
   return _adminDeleteToken;
 }
 
-// Best-effort: called AFTER Firestore cleanup so a Worker failure never blocks the UI.
+// Called AFTER Firestore cleanup. Surfaces failures so the admin can fix config.
 async function deleteFirebaseAuthUser(uid) {
   const token = await getAdminDeleteToken();
-  if (!token) return;
+  if (!token) {
+    alert("Firestore cleanup succeeded BUT the Firebase Auth account was NOT deleted.\n\nReason: Admin delete secret is not configured in System tab.\nThe user can still log in until you delete them from the Firebase Console.");
+    return;
+  }
   try {
     const res = await fetch(UPLOAD_WORKER_URL + "/admin/delete-auth-user", {
       method: "POST",
@@ -67,9 +70,11 @@ async function deleteFirebaseAuthUser(uid) {
       body: JSON.stringify({ uid, token }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) console.warn("Auth account delete failed:", data.error);
+    if (!res.ok) {
+      alert("Firestore cleanup succeeded BUT the Firebase Auth account was NOT deleted.\n\nWorker error: " + (data.error || res.status) + "\n\nFix: open the System tab → Admin API → Test secret. If the test fails, check that the same secret is set as ADMIN_DELETE_SECRET in your Cloudflare Worker dashboard.");
+    }
   } catch (err) {
-    console.warn("Auth delete request failed:", err.message);
+    alert("Firestore cleanup succeeded BUT the Firebase Auth account was NOT deleted.\n\nNetwork error reaching Worker: " + err.message);
   }
 }
 
@@ -162,6 +167,7 @@ let systemVerified = false; // cleared each page load — re-auth required per s
 protect(["admin"], (user, profile) => {
   adminUser = user; adminProfile = profile;
   initSubHero(user, profile, { page: "admin", active: "tab-dash", tabs: adminTabs() });
+  renderAdminDash();      // explicit render so the dashboard never relies on shOnTab timing
   loadStudents();         // preload for fast tab switch
   buildPositionOptions(); // populate exec form (cheap, no query)
   initBulkUpload();       // wires buttons (no query)
@@ -194,18 +200,19 @@ function renderAdminDash() {
   dc.dataset.loaded = "1";
   const greeting = getDashGreeting();
   dc.innerHTML = `
-    <div class="card" style="margin-bottom:14px;background:var(--primary);color:#fff;padding:20px 22px">
-      <div style="font-size:18px;font-weight:700">${greeting}, ${esc(adminProfile?.name || "Admin")}.</div>
-      <div style="font-size:14px;margin-top:4px;opacity:.85">Admin &nbsp;·&nbsp; Here's your role overview.</div>
+    <div style="margin-bottom:14px;background:var(--green);color:#fff;padding:22px 24px;border-radius:14px;box-shadow:0 4px 14px rgba(0,85,165,.15)">
+      <div style="font-size:20px;font-weight:800;color:#fff">${greeting}, UZES Patron.</div>
+      <div style="font-size:14px;margin-top:6px;color:#dbeafe">Patron &nbsp;·&nbsp; Here's your role overview.</div>
     </div>
     <div class="card" style="padding:20px 22px">
-      <div style="font-size:15px;font-weight:700;margin-bottom:12px">What you can do</div>
-      <ul style="margin:0;padding-left:18px;line-height:1.8;font-size:14px;color:var(--muted)">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px;color:var(--text)">What you can do</div>
+      <ul style="margin:0;padding-left:18px;line-height:1.8;font-size:14px;color:var(--text)">
         <li>Manage student accounts — add, edit, delete, or import via CSV</li>
         <li>Manage executive accounts and assign positions</li>
-        <li>Confirm payments and generate receipt emails</li>
-        <li>Configure system settings — email relay, 2FA, and more</li>
-        <li>View financial reports and income/expense records</li>
+        <li>Reset executive passwords and toggle account access</li>
+        <li>Configure system settings — email relay, admin API secret, environment</li>
+        <li>Run year-end reset to clear financial records and Cloudflare proofs</li>
+        <li>View the audit log for sensitive admin actions</li>
       </ul>
     </div>`;
 }
@@ -842,6 +849,43 @@ async function initSettings() {
     const apiSnap = await getDoc(doc(db, "settings", "adminApi"));
     if (apiSnap.exists()) document.getElementById("adminDeleteToken").value = apiSnap.data().deleteToken || "";
   } catch (_) {}
+
+  // ── Test the admin secret against the Worker (no destructive action) ──
+  const testBtn = document.getElementById("testAdminApiBtn");
+  if (testBtn) {
+    testBtn.addEventListener("click", async () => {
+      const result = document.getElementById("testAdminApiResult");
+      const token = document.getElementById("adminDeleteToken").value.trim();
+      if (!token) {
+        result.style.color = "var(--danger)";
+        result.textContent = "Enter a secret first.";
+        return;
+      }
+      result.style.color = "var(--muted)";
+      result.textContent = "Testing…";
+      try {
+        const res = await fetch(UPLOAD_WORKER_URL + "/admin/test-secret", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          result.style.color = "var(--ok)";
+          result.textContent = "✓ Secret matches the Worker. Firebase Auth deletion will work.";
+        } else if (res.status === 401) {
+          result.style.color = "var(--danger)";
+          result.textContent = "✗ Secret does NOT match. Update ADMIN_DELETE_SECRET in the Cloudflare Worker dashboard, or paste the correct secret here.";
+        } else {
+          result.style.color = "var(--danger)";
+          result.textContent = "✗ Test failed: " + (data.error || res.status);
+        }
+      } catch (err) {
+        result.style.color = "var(--danger)";
+        result.textContent = "✗ Could not reach the Worker: " + err.message;
+      }
+    });
+  }
 
   document.getElementById("saveAdminApiBtn").addEventListener("click", async () => {
     const errEl = document.getElementById("adminApiErr");
