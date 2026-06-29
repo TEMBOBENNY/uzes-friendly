@@ -27,7 +27,7 @@ export const FCM_VAPID_KEY = "BOyshAeGwjo5A-c17HGScSABtecfg5BdsgnuQPm5wJo_au9RTD
 // App Check (reCAPTCHA v3) site key — PUBLIC by design, safe to ship.
 // Get it from: Firebase Console → App Check → Apps → register your web app
 // with reCAPTCHA v3. Paste the SITE key here. Leave "" to keep App Check off.
-export const RECAPTCHA_SITE_KEY = "";
+export const RECAPTCHA_SITE_KEY = "6LejNzwtAAAAAGcxw8GBiKqdvPwoBrmOQxC_qO1E";
 
 // Organisation details printed on receipts / emails.
 export const ORG = {
