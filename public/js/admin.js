@@ -316,14 +316,8 @@ async function loadStudents(append = false) {
     _stuHasMore = sSnap.docs.length === 100;
 
     if (!append) {
-      // First load: also include any legacy students still in `users/`
-      const uSnap = await getDocs(collection(db, "users"));
-      const byId = {};
-      uSnap.docs.forEach(d => {
-        if (d.data().role === "student") byId[d.id] = { id: d.id, __col: "users", ...d.data() };
-      });
-      sSnap.docs.forEach(d => { byId[d.id] = { id: d.id, __col: "students", ...d.data() }; });
-      allStudents = Object.values(byId).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      allStudents = sSnap.docs.map(d => ({ id: d.id, __col: "students", ...d.data() }));
+      allStudents.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     } else {
       sSnap.docs.forEach(d => {
         const idx = allStudents.findIndex(s => s.id === d.id);
@@ -474,19 +468,11 @@ function buildPositionOptions() {
 async function loadExecutives() {
   execList.innerHTML = "<p class='muted'>Loading…</p>";
   try {
-    // New `executives` collection + any not-yet-migrated execs still in `users`.
-    const [eSnap, uSnap] = await Promise.all([
-      getDocs(collection(db, "executives")),
-      getDocs(collection(db, "users")),
-    ]);
-    const byId = {};
-    eSnap.docs.forEach(d => {
-      if (d.data().role === "executive") byId[d.id] = { id: d.id, __col: "executives", ...d.data() };
-    });
-    uSnap.docs.forEach(d => {
-      if (d.data().role === "executive" && !byId[d.id]) byId[d.id] = { id: d.id, __col: "users", ...d.data() };
-    });
-    const execs = Object.values(byId).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    const eSnap = await getDocs(collection(db, "executives"));
+    const execs = eSnap.docs
+      .filter(d => d.data().role === "executive")
+      .map(d => ({ id: d.id, __col: "executives", ...d.data() }))
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     if (!execs.length) { execList.innerHTML = "<p class='muted'>No executive accounts yet.</p>"; return; }
     execList.innerHTML = execs.map(u => execRowHTML(u.id, u)).join("");
   } catch (e) {

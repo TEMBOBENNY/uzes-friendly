@@ -107,12 +107,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Legacy collection — accounts created before the split keep working here until
-    // the admin runs the migration. Own-profile read stays allowed so guard.js can
-    // detect a disable and force logout.
+    // Legacy collection — migration complete; collection is now empty.
+    // Own-profile read kept as a safety net for guard.js. Admin read kept for
+    // the migration tool to verify emptiness. No new accounts may be created here.
     match /users/{uid} {
-      allow read: if signedIn() && (myUid() == uid || isExec());
-      allow create: if isAdmin();
+      allow read: if signedIn() && (myUid() == uid || isAdmin());
+      allow create: if false;
       allow update: if isAdmin()
                     || (signedIn() && myUid() == uid && myActive() && notTouchingSensitive());
       allow delete: if isAdmin();
