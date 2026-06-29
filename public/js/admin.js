@@ -170,6 +170,27 @@ const execForm = document.getElementById("execForm");
 const execErr  = document.getElementById("execErr");
 const execBtn  = document.getElementById("execBtn");
 
+// ── Row-action delegation (replaces inline onclick handlers) ───────────────────
+stuList.addEventListener("click", e => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const { action, id, col, active, email, name } = btn.dataset;
+  if (action === "edit-stu")   editStu(id, col);
+  if (action === "toggle")     toggleActive(id, col, active === "true");
+  if (action === "reset-pw")   resetPw(email);
+  if (action === "delete-stu") deleteStu(id, col, name);
+});
+
+execList.addEventListener("click", e => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const { action, id, col, active, email, name } = btn.dataset;
+  if (action === "edit-exec")   editExec(id, col);
+  if (action === "toggle")      toggleActive(id, col, active === "true");
+  if (action === "reset-pw")    resetPw(email);
+  if (action === "delete-exec") deleteExec(id, col, name);
+});
+
 let adminUser, adminProfile;
 let systemVerified = false; // cleared each page load — re-auth required per session
 
@@ -367,12 +388,12 @@ function studentRowHTML(id, u) {
       <div class="user-meta">${esc(u.department) || "—"} · ${esc(u.email)}</div>
     </div>
     <div class="row-actions">
-      <button class="btn-sm" onclick="editStu('${eid}','${ecol}')">Edit</button>
-      <button class="btn-sm" onclick="toggleActive('${eid}','${ecol}',${u.active!==false})">
+      <button class="btn-sm" data-action="edit-stu" data-id="${eid}" data-col="${ecol}">Edit</button>
+      <button class="btn-sm" data-action="toggle" data-id="${eid}" data-col="${ecol}" data-active="${u.active!==false}">
         ${u.active===false ? "Enable" : "Disable"}
       </button>
-      <button class="btn-sm danger" onclick="resetPw('${esc(u.email)}')">Reset PW</button>
-      <button class="btn-sm danger" onclick="deleteStu('${eid}','${ecol}','${esc(u.name||"")}')">Delete</button>
+      <button class="btn-sm danger" data-action="reset-pw" data-email="${esc(u.email)}">Reset PW</button>
+      <button class="btn-sm danger" data-action="delete-stu" data-id="${eid}" data-col="${ecol}" data-name="${esc(u.name||"")}">Delete</button>
     </div>
   </div>`;
 }
@@ -417,7 +438,7 @@ stuForm.addEventListener("submit", async (e) => {
   }
 });
 
-window.editStu = async (uid, col) => {
+async function editStu(uid, col) {
   col = col || "students";
   const snap = await getDoc(doc(db, col, uid));
   if (!snap.exists()) return;
@@ -439,7 +460,7 @@ window.editStu = async (uid, col) => {
   document.getElementById("stuCancel").style.display  = "";
   document.getElementById("stuFormHead").textContent  = "Edit student account";
   stuForm.scrollIntoView({ behavior: "smooth" });
-};
+}
 
 function clearStuForm() {
   stuForm.reset();
@@ -489,12 +510,12 @@ function execRowHTML(id, u) {
       <div class="user-meta">${esc(u.position) || "No position"} · ${esc(u.email)}</div>
     </div>
     <div class="row-actions">
-      <button class="btn-sm" onclick="editExec('${eid}','${ecol}')">Edit</button>
-      <button class="btn-sm" onclick="toggleActive('${eid}','${ecol}',${u.active!==false})">
+      <button class="btn-sm" data-action="edit-exec" data-id="${eid}" data-col="${ecol}">Edit</button>
+      <button class="btn-sm" data-action="toggle" data-id="${eid}" data-col="${ecol}" data-active="${u.active!==false}">
         ${u.active===false ? "Enable" : "Disable"}
       </button>
-      <button class="btn-sm danger" onclick="resetPw('${esc(u.email)}')">Reset PW</button>
-      <button class="btn-sm danger" onclick="deleteExec('${eid}','${ecol}','${esc(u.name||"")}')">Delete</button>
+      <button class="btn-sm danger" data-action="reset-pw" data-email="${esc(u.email)}">Reset PW</button>
+      <button class="btn-sm danger" data-action="delete-exec" data-id="${eid}" data-col="${ecol}" data-name="${esc(u.name||"")}">Delete</button>
     </div>
   </div>`;
 }
@@ -533,7 +554,7 @@ execForm.addEventListener("submit", async (e) => {
   }
 });
 
-window.editExec = async (uid, col) => {
+async function editExec(uid, col) {
   col = col || "executives";
   const snap = await getDoc(doc(db, col, uid));
   if (!snap.exists()) return;
@@ -553,7 +574,7 @@ window.editExec = async (uid, col) => {
   document.getElementById("execCancel").style.display  = "";
   document.getElementById("execFormHead").textContent  = "Edit executive account";
   execForm.scrollIntoView({ behavior: "smooth" });
-};
+}
 
 function clearExecForm() {
   execForm.reset();
@@ -571,17 +592,17 @@ function clearExecForm() {
 document.getElementById("execCancel").addEventListener("click", clearExecForm);
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  SHARED GLOBAL HELPERS (inline onclick)
+//  SHARED ROW HANDLERS (called via event delegation, not window globals)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-window.toggleActive = async (uid, col, currentlyActive) => {
+async function toggleActive(uid, col, currentlyActive) {
   if (!confirm(`${currentlyActive ? "Disable" : "Enable"} this account?`)) return;
-  await updateDoc(doc(db, col || "users", uid), { active: !currentlyActive });
+  await updateDoc(doc(db, col, uid), { active: !currentlyActive });
   loadStudents();
   if (execsLoaded) loadExecutives();
-};
+}
 
-window.resetPw = async (email) => {
+async function resetPw(email) {
   if (!confirm(`Send a password reset email to ${email}?`)) return;
   try {
     await sendPasswordResetEmail(auth, email, {
@@ -589,9 +610,9 @@ window.resetPw = async (email) => {
     });
     alert("Password reset email sent to " + email + ".\n\nIf it doesn't arrive within a few minutes, ask the user to check their spam/junk folder.");
   } catch (e) { alert("Failed: " + e.message); }
-};
+}
 
-window.deleteStu = async (uid, col, name) => {
+async function deleteStu(uid, col, name) {
   col = col || "students";
   if (!confirm(`Permanently delete student "${name}"?\n\nThis removes their profile and login account. Payment records are kept for the financial archive.`)) return;
   try {
@@ -603,9 +624,9 @@ window.deleteStu = async (uid, col, name) => {
     audit("student_deleted", { targetUid: uid, col });
     await loadStudents();
   } catch (e) { alert("Delete failed: " + e.message); }
-};
+}
 
-window.deleteExec = async (uid, col, name) => {
+async function deleteExec(uid, col, name) {
   col = col || "executives";
   if (!confirm(`Permanently delete executive "${name}"?\n\nThis removes their profile, signature, any About page listing (including photos in Cloudflare), and their login account.`)) return;
   try {
@@ -636,7 +657,7 @@ window.deleteExec = async (uid, col, name) => {
     audit("exec_deleted", { targetUid: uid, col });
     await loadExecutives();
   } catch (e) { alert("Delete failed: " + e.message); }
-};
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  BULK UPLOAD
