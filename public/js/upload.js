@@ -175,7 +175,7 @@ export async function deleteUpload(urls) {
  * Delete EVERY file under a key prefix (e.g. "uzes-proofs/") from R2.
  * Used by the year-end reset to guarantee the proofs folder is fully cleared.
  * This mass operation is gated by the admin secret on the Worker, so the caller
- * must pass it (from settings/adminApi.deleteToken).
+ * must pass it (the System tab's session-only admin delete secret input).
  *
  * @param {string} prefix
  * @param {string} secret  admin delete secret (ADMIN_DELETE_SECRET on the Worker)

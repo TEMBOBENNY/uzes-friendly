@@ -10,7 +10,7 @@ import {
   query, where, orderBy, limit, startAfter, serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  sendPasswordResetEmail, reauthenticateWithCredential, EmailAuthProvider
+  sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeApp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -58,32 +58,20 @@ async function createAccount(email, password, writeDocs) {
 }
 
 // ── Admin Auth-deletion helpers ───────────────────────────────────────────────
-// Token is stored in Firestore settings/adminApi (admin-only) and cached here.
-let _adminDeleteToken = null;
-async function getAdminDeleteToken() {
-  if (_adminDeleteToken !== null) return _adminDeleteToken;
-  try {
-    const snap = await getDoc(doc(db, "settings", "adminApi"));
-    _adminDeleteToken = snap.exists() ? (snap.data().deleteToken || "") : "";
-  } catch (_) { _adminDeleteToken = ""; }
-  return _adminDeleteToken;
+// Secrets are session-only: read straight from the System tab inputs, never
+// persisted to Firestore or anywhere else. Lost on page reload by design.
+function getAdminDeleteToken() {
+  return document.getElementById("adminDeleteToken")?.value.trim() || "";
 }
-
-let _adminResetToken = null;
-async function getAdminResetToken() {
-  if (_adminResetToken !== null) return _adminResetToken;
-  try {
-    const snap = await getDoc(doc(db, "settings", "adminApi"));
-    _adminResetToken = snap.exists() ? (snap.data().resetToken || "") : "";
-  } catch (_) { _adminResetToken = ""; }
-  return _adminResetToken;
+function getAdminResetToken() {
+  return document.getElementById("adminResetToken")?.value.trim() || "";
 }
 
 // Called AFTER Firestore cleanup. Surfaces failures so the admin can fix config.
 async function deleteFirebaseAuthUser(uid) {
-  const token = await getAdminDeleteToken();
+  const token = getAdminDeleteToken();
   if (!token) {
-    alert("Firestore cleanup succeeded BUT the Firebase Auth account was NOT deleted.\n\nReason: Admin delete secret is not configured in System tab.\nThe user can still log in until you delete them from the Firebase Console.");
+    alert("Firestore cleanup succeeded BUT the Firebase Auth account was NOT deleted.\n\nReason: paste the admin delete secret in System tab → Admin API first (it's session-only and isn't saved).\nThe user can still log in until you delete them from the Firebase Console.");
     return;
   }
   try {
@@ -269,16 +257,58 @@ function getDashGreeting() {
 }
 
 // ── System tab 2FA (password re-auth) ─────────────────────────────────────────
-function showSystemVerify() {
-  const modal  = document.getElementById("sysVerifyModal");
-  const pwInput = document.getElementById("sysVerifyPw");
-  const errEl  = document.getElementById("sysVerifyErr");
-  const form   = document.getElementById("sysVerifyForm");
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
 
-  document.getElementById("sysVerifyEmail").value = adminUser.email;
-  pwInput.value = ""; errEl.textContent = "";
+function showSystemVerify() {
+  const modal     = document.getElementById("sysVerifyModal");
+  const introEl   = document.getElementById("sysOtpIntro");
+  const step1     = document.getElementById("sysOtpStep1");
+  const sendBtn   = document.getElementById("sysOtpSendBtn");
+  const resendBtn = document.getElementById("sysOtpResendBtn");
+  const form      = document.getElementById("sysVerifyForm");
+  const codeInput = document.getElementById("sysVerifyCode");
+  const errEl     = document.getElementById("sysVerifyErr");
+  const cancelBtn = document.getElementById("sysVerifyCancel");
+
+  introEl.textContent = `We'll email a one-time code to ${adminUser.email} to unlock this tab.`;
+  errEl.textContent = ""; codeInput.value = "";
+  step1.style.display = "block";
+  form.style.display = "none";
   modal.style.display = "flex";
-  setTimeout(() => pwInput.focus(), 60);
+
+  async function sendCode() {
+    errEl.textContent = "";
+    sendBtn.disabled = true; sendBtn.textContent = "Sending…";
+    try {
+      const code      = String(Math.floor(100000 + Math.random() * 900000));
+      const codeHash  = await sha256Hex(code);
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      await setDoc(doc(db, "settings", "sysOtp"), { codeHash, uid: adminUser.uid, expiresAt });
+      const res = await fetch(UPLOAD_WORKER_URL + "/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...await authHeaders() },
+        body: JSON.stringify({
+          type: "admin_otp",
+          to: adminUser.email,
+          code,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || ("Worker returned " + res.status));
+      }
+      step1.style.display = "none";
+      form.style.display = "block";
+      setTimeout(() => codeInput.focus(), 60);
+    } catch (err) {
+      errEl.textContent = "Failed to send code: " + err.message;
+    } finally {
+      sendBtn.disabled = false; sendBtn.textContent = "Send code to my email";
+    }
+  }
 
   async function handleVerify(e) {
     e.preventDefault();
@@ -286,15 +316,21 @@ function showSystemVerify() {
     const btn = form.querySelector("button[type=submit]");
     btn.disabled = true; btn.textContent = "Verifying…";
     try {
-      const cred = EmailAuthProvider.credential(adminUser.email, pwInput.value);
-      await reauthenticateWithCredential(adminUser, cred);
+      const entered = codeInput.value.trim();
+      if (!/^\d{6}$/.test(entered)) { errEl.textContent = "Enter the 6-digit code."; return; }
+      const snap = await getDoc(doc(db, "settings", "sysOtp"));
+      if (!snap.exists()) { errEl.textContent = "No code requested. Click Send code."; return; }
+      const data = snap.data();
+      if (data.uid !== adminUser.uid) { errEl.textContent = "Code was issued to a different admin."; return; }
+      if (Date.now() > data.expiresAt) { errEl.textContent = "Code expired — click Resend."; return; }
+      const enteredHash = await sha256Hex(entered);
+      if (enteredHash !== data.codeHash) { errEl.textContent = "Incorrect code."; codeInput.select(); return; }
+      await deleteDoc(doc(db, "settings", "sysOtp"));
       systemVerified = true;
       closeVerify();
       window.shShowTab("tab-system");
     } catch (err) {
-      errEl.textContent =
-        err.code === "auth/wrong-password" || err.code === "auth/invalid-credential"
-          ? "Incorrect password." : err.message;
+      errEl.textContent = err.message;
     } finally {
       btn.disabled = false; btn.textContent = "Verify";
     }
@@ -302,11 +338,15 @@ function showSystemVerify() {
 
   function closeVerify() {
     modal.style.display = "none";
+    sendBtn.removeEventListener("click", sendCode);
+    resendBtn.removeEventListener("click", sendCode);
     form.removeEventListener("submit", handleVerify);
   }
 
+  sendBtn.addEventListener("click", sendCode);
+  resendBtn.addEventListener("click", sendCode);
   form.addEventListener("submit", handleVerify);
-  document.getElementById("sysVerifyCancel").onclick = closeVerify;
+  cancelBtn.onclick = closeVerify;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -894,21 +934,13 @@ async function initSettings() {
   document.getElementById("seedLibraryBtn").addEventListener("click", seedLibraryCourses);
   initSecretaryCard();
 
-  // Admin API tokens (for Firebase Auth deletion and password reset)
-  try {
-    const apiSnap = await getDoc(doc(db, "settings", "adminApi"));
-    if (apiSnap.exists()) {
-      document.getElementById("adminDeleteToken").value = apiSnap.data().deleteToken || "";
-      document.getElementById("adminResetToken").value  = apiSnap.data().resetToken  || "";
-    }
-  } catch (_) {}
-
-  // ── Test the admin secret against the Worker (no destructive action) ──
+  // Admin API secrets are session-only — typed into the inputs each visit, never
+  // persisted. Just wire up the "Test secret" button against the Worker.
   const testBtn = document.getElementById("testAdminApiBtn");
   if (testBtn) {
     testBtn.addEventListener("click", async () => {
       const result = document.getElementById("testAdminApiResult");
-      const token = document.getElementById("adminDeleteToken").value.trim();
+      const token = getAdminDeleteToken();
       if (!token) {
         result.style.color = "var(--danger)";
         result.textContent = "Enter a secret first.";
@@ -919,8 +951,8 @@ async function initSettings() {
       try {
         const res = await fetch(UPLOAD_WORKER_URL + "/admin/test-secret", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
+          headers: { "Content-Type": "application/json", ...await authHeaders() },
+          body: JSON.stringify({ token, type: "delete" }),
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.ok) {
@@ -939,78 +971,6 @@ async function initSettings() {
       }
     });
   }
-
-  document.getElementById("saveAdminApiBtn").addEventListener("click", async () => {
-    const errEl = document.getElementById("adminApiErr");
-    const okEl  = document.getElementById("adminApiOk");
-    const btn   = document.getElementById("saveAdminApiBtn");
-    errEl.textContent = ""; okEl.textContent = "";
-    btn.disabled = true; btn.textContent = "Saving…";
-    try {
-      const deleteToken = document.getElementById("adminDeleteToken").value.trim();
-      const resetToken  = document.getElementById("adminResetToken").value.trim();
-      await setDoc(doc(db, "settings", "adminApi"), { deleteToken, resetToken }, { merge: true });
-      _adminDeleteToken = deleteToken;
-      _adminResetToken  = resetToken;
-      okEl.textContent = "Saved.";
-    } catch (err) {
-      errEl.textContent = "Failed: " + err.message;
-    } finally {
-      btn.disabled = false; btn.textContent = "Save";
-    }
-  });
-
-  document.getElementById("migrateUsersBtn")?.addEventListener("click", migrateLegacyUsers);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-//  LEGACY USER MIGRATION  (moves users/ docs → students/ or executives/)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-async function migrateLegacyUsers() {
-  const btn      = document.getElementById("migrateUsersBtn");
-  const statusEl = document.getElementById("migrateUsersStatus");
-  if (!confirm(
-    "Move all legacy accounts from the old `users` collection to `students` or `executives`.\n\n" +
-    "Accounts already in the new collections are skipped. Continue?"
-  )) return;
-  btn.disabled = true;
-  statusEl.style.color = "var(--muted)";
-  statusEl.textContent = "Reading legacy users…";
-  try {
-    const uSnap = await getDocs(collection(db, "users"));
-    if (uSnap.empty) {
-      statusEl.textContent = "No legacy users found — already fully migrated.";
-      btn.disabled = false;
-      return;
-    }
-    let moved = 0, skipped = 0, errors = 0;
-    const total = uSnap.docs.length;
-    for (const d of uSnap.docs) {
-      const data = d.data();
-      const role = data.role || "student";
-      const targetCol = (role === "executive" || role === "admin") ? "executives" : "students";
-      try {
-        const existing = await getDoc(doc(db, targetCol, d.id));
-        if (!existing.exists()) await setDoc(doc(db, targetCol, d.id), data);
-        else skipped++;
-        await deleteDoc(doc(db, "users", d.id));
-        moved++;
-      } catch (err) {
-        console.error("Migration error for", d.id, err.message);
-        errors++;
-      }
-      statusEl.textContent = `Processing ${moved + errors} of ${total}…`;
-    }
-    statusEl.style.color = errors ? "var(--danger)" : "var(--ok)";
-    statusEl.textContent = `Done: ${moved} moved (${skipped} were already in new collections), ${errors} errors. Reload to refresh lists.`;
-    audit("users_migration", { moved, skipped, errors, total });
-    if (moved > 0) { allStudents = []; _stuLastDoc = null; await loadStudents(); await loadExecutives(); }
-  } catch (err) {
-    statusEl.style.color = "var(--danger)";
-    statusEl.textContent = "Migration failed: " + err.message;
-  }
-  btn.disabled = false;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

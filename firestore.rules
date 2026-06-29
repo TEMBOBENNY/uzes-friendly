@@ -155,15 +155,11 @@ service cloud.firestore {
     }
 
     // Settings hold sensitive configuration — access is role-gated per document.
-    // settings/adminApi contains the admin-delete secret — admin-only read, never exec.
-    // All other settings docs (emailRelay, etc.) are exec-readable for operational use.
+    // sysOtp holds the one-time-code hash for the System tab unlock — admin only.
+    // emailRelay holds only the isTrial flag — exec-readable for operational use.
     match /settings/{id} {
-      // adminApi holds the delete secret — admin only.
-      // emailRelay holds the Apps Script webhook URL + token — students need it
-      // to trigger their own placement letter after accepting.
-      // All other settings are exec-only.
-      allow read:  if id == 'adminApi'    ? isAdmin()
-                 : id == 'emailRelay'    ? isExec()
+      allow read:  if id == 'sysOtp'    ? isAdmin()
+                 : id == 'emailRelay'  ? isExec()
                  : isExec();
       allow write: if isAdmin();
     }

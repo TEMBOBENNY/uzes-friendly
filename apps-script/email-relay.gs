@@ -54,6 +54,8 @@ function doPost(e) {
     } else if (data.type === "placement_letter") {
       var placPdf = buildPlacementLetterPdf(data);
       sendPlacementLetterEmail(data, placPdf);
+    } else if (data.type === "admin_otp") {
+      sendAdminOtpEmail(data);
     } else {
       var pdf = buildReceiptPdf(data);
       sendReceiptEmail(data, pdf);
@@ -91,6 +93,22 @@ function sendRejectionEmail(d) {
     htmlBody: body,
     replyTo:  'uzesofficial@gmail.com',
     name:     'UZES Payments'
+  });
+}
+
+// ── Admin System-tab one-time code ────────────────────────────────────────────
+function sendAdminOtpEmail(d) {
+  var body =
+    '<p>Your one-time code to unlock <strong>System settings</strong> is:</p>' +
+    '<p style="font-size:28px;font-weight:900;letter-spacing:6px;margin:14px 0">' + esc(d.code || '') + '</p>' +
+    '<p>This code expires in 10 minutes. If you did not request this, you can ignore this email.</p>';
+
+  MailApp.sendEmail({
+    to:       d.to,
+    subject:  'UZES admin — system settings code',
+    htmlBody: body,
+    replyTo:  'uzesofficial@gmail.com',
+    name:     'UZES Admin'
   });
 }
 
