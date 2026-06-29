@@ -5,7 +5,7 @@ import { executiveTabs } from "./nav.js";
 import { uploadProof, deleteUpload, authHeaders } from "./upload.js";
 import {
   collection, doc, getDoc, getDocs, addDoc, deleteDoc, updateDoc, setDoc,
-  query, where, orderBy, serverTimestamp, runTransaction, writeBatch
+  query, where, orderBy, limit, startAfter, serverTimestamp, runTransaction, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   reauthenticateWithCredential, EmailAuthProvider, updatePassword
@@ -386,6 +386,8 @@ async function loadPending() {
 
 // ── All payments ───────────────────────────────────────────────────────────────
 let _allDocs = [];
+let _allLastDoc = null;
+let _allHasMore = false;
 
 function renderAllFiltered(q) {
   const term = q.trim().toLowerCase();
@@ -399,14 +401,32 @@ function renderAllFiltered(q) {
   allList.innerHTML = visible.length
     ? visible.map(d => payCard(d, false)).join("")
     : `<p class='muted'>No payments match "${q}".</p>`;
+  if (_allHasMore && !term) {
+    const btn = document.createElement("button");
+    btn.id = "allLoadMore"; btn.className = "btn-ghost";
+    btn.style.cssText = "width:100%;margin-top:10px;padding:9px";
+    btn.textContent = `Load more payments (${_allDocs.length} loaded)`;
+    btn.onclick = () => { btn.disabled = true; btn.textContent = "Loading…"; loadAll(true); };
+    allList.appendChild(btn);
+  }
 }
 
-async function loadAll() {
-  allList.innerHTML = "<p class='muted'>Loading…</p>";
+async function loadAll(append = false) {
+  if (!append) {
+    allList.innerHTML = "<p class='muted'>Loading…</p>";
+    _allDocs = [];
+    _allLastDoc = null;
+    _allHasMore = false;
+  }
   try {
-    const snap = await getDocs(query(collection(db, "payments"), orderBy("submittedAt", "desc")));
-    if (snap.empty) { allList.innerHTML = "<p class='muted'>No payments yet.</p>"; _allDocs = []; return; }
-    _allDocs = snap.docs;
+    const payQ = _allLastDoc
+      ? query(collection(db, "payments"), orderBy("submittedAt", "desc"), startAfter(_allLastDoc), limit(100))
+      : query(collection(db, "payments"), orderBy("submittedAt", "desc"), limit(100));
+    const snap = await getDocs(payQ);
+    if (!append && snap.empty) { allList.innerHTML = "<p class='muted'>No payments yet.</p>"; return; }
+    _allLastDoc = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+    _allHasMore = snap.docs.length === 100;
+    _allDocs = append ? [..._allDocs, ...snap.docs] : snap.docs;
     const searchEl = document.getElementById("allSearchInput");
     renderAllFiltered(searchEl ? searchEl.value : "");
     if (searchEl && !searchEl.dataset.wired) {

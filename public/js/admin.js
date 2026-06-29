@@ -7,7 +7,7 @@ import { uploadArchive, deleteUpload, deleteUploadPrefix, authHeaders } from "./
 import { audit } from "./audit.js";
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-  query, where, orderBy, serverTimestamp, writeBatch
+  query, where, orderBy, limit, startAfter, serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   sendPasswordResetEmail, reauthenticateWithCredential, EmailAuthProvider
@@ -297,21 +297,41 @@ function friendlyErr(err) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 let allStudents = [];
+let _stuLastDoc = null;
+let _stuHasMore = false;
 
-async function loadStudents() {
-  stuList.innerHTML = "<p class='muted'>Loading…</p>";
+async function loadStudents(append = false) {
+  if (!append) {
+    stuList.innerHTML = "<p class='muted'>Loading…</p>";
+    allStudents = [];
+    _stuLastDoc = null;
+    _stuHasMore = false;
+  }
   try {
-    // New `students` collection + any not-yet-migrated students still in `users`.
-    const [sSnap, uSnap] = await Promise.all([
-      getDocs(collection(db, "students")),
-      getDocs(collection(db, "users")),
-    ]);
-    const byId = {};
-    sSnap.docs.forEach(d => { byId[d.id] = { id: d.id, __col: "students", ...d.data() }; });
-    uSnap.docs.forEach(d => {
-      if (d.data().role === "student" && !byId[d.id]) byId[d.id] = { id: d.id, __col: "users", ...d.data() };
-    });
-    allStudents = Object.values(byId).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    const stuQ = _stuLastDoc
+      ? query(collection(db, "students"), orderBy("name"), startAfter(_stuLastDoc), limit(100))
+      : query(collection(db, "students"), orderBy("name"), limit(100));
+    const sSnap = await getDocs(stuQ);
+    _stuLastDoc = sSnap.docs.length ? sSnap.docs[sSnap.docs.length - 1] : null;
+    _stuHasMore = sSnap.docs.length === 100;
+
+    if (!append) {
+      // First load: also include any legacy students still in `users/`
+      const uSnap = await getDocs(collection(db, "users"));
+      const byId = {};
+      uSnap.docs.forEach(d => {
+        if (d.data().role === "student") byId[d.id] = { id: d.id, __col: "users", ...d.data() };
+      });
+      sSnap.docs.forEach(d => { byId[d.id] = { id: d.id, __col: "students", ...d.data() }; });
+      allStudents = Object.values(byId).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    } else {
+      sSnap.docs.forEach(d => {
+        const idx = allStudents.findIndex(s => s.id === d.id);
+        const entry = { id: d.id, __col: "students", ...d.data() };
+        if (idx >= 0) allStudents[idx] = entry; else allStudents.push(entry);
+      });
+      allStudents.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    }
     renderStudents();
   } catch (e) {
     stuList.innerHTML = `<p class='error'>Failed to load: ${e.message}</p>`;
@@ -331,6 +351,14 @@ function renderStudents() {
     : allStudents;
   if (!list.length) { stuList.innerHTML = `<p class='muted'>No students match "${esc(q)}".</p>`; return; }
   stuList.innerHTML = list.map(u => studentRowHTML(u.id, u)).join("");
+  if (_stuHasMore && !q) {
+    const btn = document.createElement("button");
+    btn.id = "stuLoadMore"; btn.className = "btn-ghost";
+    btn.style.cssText = "width:100%;margin-top:10px;padding:9px";
+    btn.textContent = `Load more students (${allStudents.length} loaded)`;
+    btn.onclick = () => { btn.disabled = true; btn.textContent = "Loading…"; loadStudents(true); };
+    stuList.appendChild(btn);
+  }
 }
 
 function studentRowHTML(id, u) {
@@ -911,6 +939,58 @@ async function initSettings() {
       btn.disabled = false; btn.textContent = "Save";
     }
   });
+
+  document.getElementById("migrateUsersBtn")?.addEventListener("click", migrateLegacyUsers);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  LEGACY USER MIGRATION  (moves users/ docs → students/ or executives/)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function migrateLegacyUsers() {
+  const btn      = document.getElementById("migrateUsersBtn");
+  const statusEl = document.getElementById("migrateUsersStatus");
+  if (!confirm(
+    "Move all legacy accounts from the old `users` collection to `students` or `executives`.\n\n" +
+    "Accounts already in the new collections are skipped. Continue?"
+  )) return;
+  btn.disabled = true;
+  statusEl.style.color = "var(--muted)";
+  statusEl.textContent = "Reading legacy users…";
+  try {
+    const uSnap = await getDocs(collection(db, "users"));
+    if (uSnap.empty) {
+      statusEl.textContent = "No legacy users found — already fully migrated.";
+      btn.disabled = false;
+      return;
+    }
+    let moved = 0, skipped = 0, errors = 0;
+    const total = uSnap.docs.length;
+    for (const d of uSnap.docs) {
+      const data = d.data();
+      const role = data.role || "student";
+      const targetCol = (role === "executive" || role === "admin") ? "executives" : "students";
+      try {
+        const existing = await getDoc(doc(db, targetCol, d.id));
+        if (!existing.exists()) await setDoc(doc(db, targetCol, d.id), data);
+        else skipped++;
+        await deleteDoc(doc(db, "users", d.id));
+        moved++;
+      } catch (err) {
+        console.error("Migration error for", d.id, err.message);
+        errors++;
+      }
+      statusEl.textContent = `Processing ${moved + errors} of ${total}…`;
+    }
+    statusEl.style.color = errors ? "var(--danger)" : "var(--ok)";
+    statusEl.textContent = `Done: ${moved} moved (${skipped} were already in new collections), ${errors} errors. Reload to refresh lists.`;
+    audit("users_migration", { moved, skipped, errors, total });
+    if (moved > 0) { allStudents = []; _stuLastDoc = null; await loadStudents(); await loadExecutives(); }
+  } catch (err) {
+    statusEl.style.color = "var(--danger)";
+    statusEl.textContent = "Migration failed: " + err.message;
+  }
+  btn.disabled = false;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
