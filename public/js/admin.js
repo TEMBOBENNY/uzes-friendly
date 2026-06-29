@@ -3,7 +3,7 @@ import { protect } from "./guard.js";
 import { initSubHero } from "./subhero.js?v=4";
 import { adminTabs } from "./nav.js";
 import { firebaseConfig, UPLOAD_WORKER_URL } from "./config.js";
-import { uploadArchive, deleteUpload, deleteUploadPrefix } from "./upload.js";
+import { uploadArchive, deleteUpload, deleteUploadPrefix, authHeaders } from "./upload.js";
 import { audit } from "./audit.js";
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
@@ -56,6 +56,16 @@ async function getAdminDeleteToken() {
   return _adminDeleteToken;
 }
 
+let _adminResetToken = null;
+async function getAdminResetToken() {
+  if (_adminResetToken !== null) return _adminResetToken;
+  try {
+    const snap = await getDoc(doc(db, "settings", "adminApi"));
+    _adminResetToken = snap.exists() ? (snap.data().resetToken || "") : "";
+  } catch (_) { _adminResetToken = ""; }
+  return _adminResetToken;
+}
+
 // Called AFTER Firestore cleanup. Surfaces failures so the admin can fix config.
 async function deleteFirebaseAuthUser(uid) {
   const token = await getAdminDeleteToken();
@@ -66,7 +76,7 @@ async function deleteFirebaseAuthUser(uid) {
   try {
     const res = await fetch(UPLOAD_WORKER_URL + "/admin/delete-auth-user", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...await authHeaders() },
       body: JSON.stringify({ uid, token }),
     });
     const data = await res.json().catch(() => ({}));
@@ -844,10 +854,13 @@ async function initSettings() {
   document.getElementById("seedLibraryBtn").addEventListener("click", seedLibraryCourses);
   initSecretaryCard();
 
-  // Admin API token (for Firebase Auth deletion)
+  // Admin API tokens (for Firebase Auth deletion and password reset)
   try {
     const apiSnap = await getDoc(doc(db, "settings", "adminApi"));
-    if (apiSnap.exists()) document.getElementById("adminDeleteToken").value = apiSnap.data().deleteToken || "";
+    if (apiSnap.exists()) {
+      document.getElementById("adminDeleteToken").value = apiSnap.data().deleteToken || "";
+      document.getElementById("adminResetToken").value  = apiSnap.data().resetToken  || "";
+    }
   } catch (_) {}
 
   // ── Test the admin secret against the Worker (no destructive action) ──
@@ -894,9 +907,11 @@ async function initSettings() {
     errEl.textContent = ""; okEl.textContent = "";
     btn.disabled = true; btn.textContent = "Saving…";
     try {
-      const token = document.getElementById("adminDeleteToken").value.trim();
-      await setDoc(doc(db, "settings", "adminApi"), { deleteToken: token }, { merge: true });
-      _adminDeleteToken = token; // update in-memory cache immediately
+      const deleteToken = document.getElementById("adminDeleteToken").value.trim();
+      const resetToken  = document.getElementById("adminResetToken").value.trim();
+      await setDoc(doc(db, "settings", "adminApi"), { deleteToken, resetToken }, { merge: true });
+      _adminDeleteToken = deleteToken;
+      _adminResetToken  = resetToken;
       okEl.textContent = "Saved.";
     } catch (err) {
       errEl.textContent = "Failed: " + err.message;
@@ -1243,9 +1258,9 @@ window.doSecPwReset = async id => {
   msg.style.color = "var(--muted)"; msg.textContent = "Saving…";
   try {
     // Use the Worker admin endpoint to update the password
-    const token = await getAdminDeleteToken();
+    const token = await getAdminResetToken();
     const resp = await fetch(UPLOAD_WORKER_URL + "/admin/reset-password", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json", ...await authHeaders() },
       body: JSON.stringify({ uid: id, newPassword: pw, secret: token })
     });
     if (!resp.ok) throw new Error("Worker returned " + resp.status + " — password reset via Firebase Console instead");

@@ -31,7 +31,8 @@
       // ?v=inline creates a new Cloudflare cache key so old immutable-cached
       // responses (without Content-Disposition: inline) are bypassed.
       const url = rawUrl + (rawUrl.includes("?") ? "&" : "?") + "v=inline";
-      const fname = decodeURIComponent(n);
+      const rawFname = decodeURIComponent(n);
+      const fname = /^[\w.\-() ]{1,200}$/.test(rawFname) ? rawFname : "file";
       const ext = (fname.split(".").pop() || "").toLowerCase();
       document.title = fname + " — UZES";
 
@@ -58,9 +59,11 @@
         // Other files (ZIP, etc.): offer a download link
         const wrap = document.createElement("div");
         wrap.id = "dl-wrap";
-        wrap.innerHTML = `<p>${fname}</p>
-          <p>This file type cannot be previewed in the browser.</p>
-          <a id="dl-link" href="${url}" download="${fname}">Download file</a>`;
+        const p1 = document.createElement("p"); p1.textContent = fname;
+        const p2 = document.createElement("p"); p2.textContent = "This file type cannot be previewed in the browser.";
+        const a = document.createElement("a");
+        a.id = "dl-link"; a.href = url; a.download = fname; a.textContent = "Download file";
+        wrap.appendChild(p1); wrap.appendChild(p2); wrap.appendChild(a);
         document.body.appendChild(wrap);
       }
     } catch(e) {
