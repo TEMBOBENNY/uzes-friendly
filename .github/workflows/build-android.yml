@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build & Deploy Android
 
 on:
   workflow_dispatch:
@@ -28,19 +28,38 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Sync Capacitor (generate Android project)
+      - name: Sync Capacitor
         run: npx cap sync android
+
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/keystore.jks
 
       - name: Grant execute permission for Gradle
         run: chmod +x android/gradlew
 
-      - name: Build APK (Debug)
+      - name: Build signed release AAB
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: "1.${{ github.run_number }}"
         run: |
           cd android
-          ./gradlew assembleDebug
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/android/app/keystore.jks \
+            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
 
-      - name: Upload APK artifact
+      - name: Upload to Play Store (internal track)
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+          packageName: com.uzes.app
+          releaseFiles: android/app/build/outputs/bundle/release/*.aab
+          track: internal
+          status: completed
+
+      - name: Save AAB as artifact (for manual sideloading)
         uses: actions/upload-artifact@v4
         with:
-          name: apk-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: aab-release-${{ github.run_number }}
+          path: android/app/build/outputs/bundle/release/*.aab
