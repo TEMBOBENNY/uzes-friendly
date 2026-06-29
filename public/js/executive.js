@@ -29,6 +29,41 @@ const sigPreview = document.getElementById("sigPreview");
 const sigPlace   = document.getElementById("sigPlaceholder");
 const saveSigBtn = document.getElementById("saveSigBtn");
 const sigErr     = document.getElementById("sigErr");
+
+// Wire static HTML elements (onclick attrs removed for CSP compliance)
+document.getElementById("sigBox")?.addEventListener("click", () => sigInput?.click());
+["pending", "flagged", "bulk", "courses"].forEach(t =>
+  document.getElementById(`lib-mod-tab-${t}`)?.addEventListener("click", () => window.switchLibModTab(t))
+);
+
+// Event delegation for all dynamically-generated action buttons
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-action^='ex:']");
+  if (!el) return;
+  const d = el.dataset;
+  switch (d.action) {
+    case "ex:view-proof":    window.viewProof(d.url); break;
+    case "ex:confirm-pay":   window.confirmPayment(d.id); break;
+    case "ex:show-rej":      window.showReject(d.id); break;
+    case "ex:confirm-rej":   window.confirmReject(d.id); break;
+    case "ex:cancel-rej":    window.cancelReject(d.id); break;
+    case "ex:del-income":    window.deleteIncome(d.id); break;
+    case "ex:approve-exp":   window.approveExpense(d.id); break;
+    case "ex:reject-exp":    window.rejectExpense(d.id); break;
+    case "ex:mod-view":      window.libModViewFile(d.fid); break;
+    case "ex:mod-approve":   window.libModApprove(d.fid); break;
+    case "ex:mod-restore":   window.libModRestore(d.fid); break;
+    case "ex:mod-delete":    window.libModDelete(d.fid, d.key); break;
+    case "ex:edit-course":   window.editLibCourse(d.id, d.name, d.prog, d.year); break;
+    case "ex:del-course":    window.deleteLibCourse(d.id, d.name); break;
+    case "ex:save-course":   window.saveLibCourse(d.id, d.prog, d.year); break;
+    case "ex:cancel-edit":   window._renderCourseList(); break;
+    case "ex:sg-assign":     window.sgAssignVacancy(d.id); break;
+    case "ex:sg-delete":     window.sgDeleteVacancy(d.id); break;
+    case "ex:sg-approve":    window.sgApprovePlacement(d.uid); break;
+    case "ex:sg-reject":     window.sgRejectPlacement(d.uid); break;
+  }
+});
 const sigOk      = document.getElementById("sigOk");
 
 let currentUser, currentProfile;
@@ -352,7 +387,7 @@ function payCard(d, showActions) {
       ${p.rejectionReason ? `<div class="pay-detail"><span class="detail-label">Rejection reason</span>${p.rejectionReason}</div>` : ""}
       <div class="pay-detail">
         <span class="detail-label">Proof</span>
-        <button class="proof-link" style="border:none;background:none;cursor:pointer;padding:0;font-size:inherit;color:inherit;text-decoration:underline" onclick="viewProof('${p.proofUrl}')">View uploaded proof ↗</button>
+        <button class="proof-link" style="border:none;background:none;cursor:pointer;padding:0;font-size:inherit;color:inherit;text-decoration:underline" data-action="ex:view-proof" data-url="${p.proofUrl}">View uploaded proof ↗</button>
       </div>
     </div>
     ${showActions && p.status === "pending" ? `
@@ -360,12 +395,12 @@ function payCard(d, showActions) {
       <div class="reject-wrap" id="reject-wrap-${d.id}" style="display:none">
         <input type="text" class="reject-input" id="reject-reason-${d.id}"
           placeholder="Reason for rejection (required)">
-        <button class="btn-danger-sm" onclick="confirmReject('${d.id}')">Confirm rejection</button>
-        <button class="btn-sm" onclick="cancelReject('${d.id}')">Cancel</button>
+        <button class="btn-danger-sm" data-action="ex:confirm-rej" data-id="${d.id}">Confirm rejection</button>
+        <button class="btn-sm" data-action="ex:cancel-rej" data-id="${d.id}">Cancel</button>
       </div>
       <div id="action-btns-${d.id}">
-        <button class="btn-confirm" onclick="confirmPayment('${d.id}')">✓ Confirm payment</button>
-        <button class="btn-reject" onclick="showReject('${d.id}')">✕ Reject</button>
+        <button class="btn-confirm" data-action="ex:confirm-pay" data-id="${d.id}">✓ Confirm payment</button>
+        <button class="btn-reject" data-action="ex:show-rej" data-id="${d.id}">✕ Reject</button>
       </div>
       <p class="action-err error" id="action-err-${d.id}"></p>
     </div>` : ""}
@@ -631,7 +666,7 @@ async function loadIncomes() {
           ${r.notes ? ` &nbsp;·&nbsp; <em>${r.notes}</em>` : ""}
         </div>
         ${isT ? `<div class="fin-row-actions">
-          <button class="btn-sm danger" onclick="deleteIncome('${r.id}')">Delete</button>
+          <button class="btn-sm danger" data-action="ex:del-income" data-id="${r.id}">Delete</button>
         </div>` : ""}
       </div>`;
     }).join("");
@@ -703,9 +738,9 @@ function renderExpenseRow(exp, showApproveButtons) {
     </div>` : ""}
     ${canAct ? `<div class="fin-row-actions">
       <button class="btn-confirm" style="padding:7px 16px;font-size:13px"
-        onclick="approveExpense('${exp.id}')">✓ Approve</button>
+        data-action="ex:approve-exp" data-id="${exp.id}">✓ Approve</button>
       <button class="btn-reject" style="padding:7px 16px;font-size:13px"
-        onclick="rejectExpense('${exp.id}')">✕ Reject</button>
+        data-action="ex:reject-exp" data-id="${exp.id}">✕ Reject</button>
     </div>` : ""}
   </div>`;
 }
@@ -874,10 +909,10 @@ function renderLibModCard(f) {
   const rk   = libEsc(f.r2Key || "");
 
   const approveBtn = (!f.isFlagged && f.moderationStatus === "under_review")
-    ? `<button class="btn-confirm" style="padding:7px 16px;font-size:13px" onclick="libModApprove('${fid}')">${_icoOk} Approve</button>`
+    ? `<button class="btn-confirm" style="padding:7px 16px;font-size:13px" data-action="ex:mod-approve" data-fid="${fid}">${_icoOk} Approve</button>`
     : "";
   const restoreBtn = f.isFlagged
-    ? `<button class="btn-sm" onclick="libModRestore('${fid}')">${_icoUndo} Restore</button>`
+    ? `<button class="btn-sm" data-action="ex:mod-restore" data-fid="${fid}">${_icoUndo} Restore</button>`
     : "";
 
   return `<div class="pay-card" id="lm-${fid}">
@@ -898,10 +933,10 @@ function renderLibModCard(f) {
     </div>
     <div class="pay-card-actions" style="flex-direction:row;gap:8px;flex-wrap:wrap;padding-top:12px">
       ${f.fileUrl
-        ? `<button class="btn-sm" onclick="libModViewFile('${fid}')">${_icoView} View file</button>`
+        ? `<button class="btn-sm" data-action="ex:mod-view" data-fid="${fid}">${_icoView} View file</button>`
         : ""}
       ${approveBtn}${restoreBtn}
-      <button class="btn-reject" style="padding:7px 16px;font-size:13px" onclick="libModDelete('${fid}','${rk}')">${_icoDel} Delete</button>
+      <button class="btn-reject" style="padding:7px 16px;font-size:13px" data-action="ex:mod-delete" data-fid="${fid}" data-key="${rk}">${_icoDel} Delete</button>
     </div>
   </div>`;
 }
@@ -1320,9 +1355,9 @@ function _renderCourseList() {
              style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bg)">
           <span id="cr-name-${libEsc(c.id)}" style="flex:1;font-size:13px">${libEsc(c.courseName)}</span>
           <button class="btn-sm" style="padding:3px 10px;font-size:12px"
-            onclick="editLibCourse('${libEsc(c.id)}','${libEsc(c.courseName)}','${libEsc(c.programme)}','${libEsc(c.year)}')">Edit</button>
+            data-action="ex:edit-course" data-id="${libEsc(c.id)}" data-name="${libEsc(c.courseName)}" data-prog="${libEsc(c.programme)}" data-year="${libEsc(c.year)}">Edit</button>
           <button class="btn-reject" style="padding:3px 10px;font-size:12px"
-            onclick="deleteLibCourse('${libEsc(c.id)}','${libEsc(c.courseName)}')">Delete</button>
+            data-action="ex:del-course" data-id="${libEsc(c.id)}" data-name="${libEsc(c.courseName)}">Delete</button>
         </div>`).join("")}
     </div>`).join("");
 }
@@ -1363,9 +1398,9 @@ window.editLibCourse = function(id, currentName, programme, year) {
     <input id="cr-edit-${libEsc(id)}" type="text" value="${libEsc(currentName)}"
       style="flex:1;padding:4px 8px;border:1px solid var(--green);border-radius:6px;font-size:13px">
     <button class="btn-confirm" style="padding:3px 10px;font-size:12px"
-      onclick="saveLibCourse('${libEsc(id)}','${libEsc(programme)}','${libEsc(year)}')">Save</button>
+      data-action="ex:save-course" data-id="${libEsc(id)}" data-prog="${libEsc(programme)}" data-year="${libEsc(year)}">Save</button>
     <button class="btn-sm" style="padding:3px 10px;font-size:12px"
-      onclick="_renderCourseList()">Cancel</button>`;
+      data-action="ex:cancel-edit">Cancel</button>`;
   document.getElementById("cr-edit-" + id)?.focus();
 };
 
@@ -1719,8 +1754,8 @@ function sgRenderVacancyCard(id, v) {
       <span class="status-pill" style="background:${statusBg}">${statusTxt}</span>
     </div>
     <div class="pay-card-actions" style="flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px">
-      <button class="btn-confirm" style="padding:8px 18px;font-size:13px" id="sg-assign-${id}" onclick="sgAssignVacancy('${id}')">Assign Now</button>
-      <button class="btn-danger-sm" style="font-size:12px;padding:6px 12px" onclick="sgDeleteVacancy('${id}')">Delete</button>
+      <button class="btn-confirm" style="padding:8px 18px;font-size:13px" id="sg-assign-${id}" data-action="ex:sg-assign" data-id="${id}">Assign Now</button>
+      <button class="btn-danger-sm" style="font-size:12px;padding:6px 12px" data-action="ex:sg-delete" data-id="${id}">Delete</button>
       <p id="sg-assign-err-${id}" class="action-err" style="width:100%;margin:2px 0 0"></p>
     </div>
   </div>`;
@@ -1803,8 +1838,8 @@ async function sgLoadTSReview() {
         </div>
         ${cvLink ? `<div style="display:flex;justify-content:flex-end;padding:6px 0 4px">${cvLink}</div>` : ""}
         <div class="req-actions">
-          <button class="btn-approve" id="sg-ts-approve-${uid}" onclick="sgApprovePlacement('${uid}')">Approve &amp; Send Letter</button>
-          <button class="btn-danger-sm" id="sg-ts-reject-${uid}" onclick="sgRejectPlacement('${uid}')">Reject (no penalty)</button>
+          <button class="btn-approve" id="sg-ts-approve-${uid}" data-action="ex:sg-approve" data-uid="${uid}">Approve &amp; Send Letter</button>
+          <button class="btn-danger-sm" id="sg-ts-reject-${uid}" data-action="ex:sg-reject" data-uid="${uid}">Reject (no penalty)</button>
           <p id="sg-ts-err-${uid}" class="action-err" style="width:100%;margin:4px 0 0"></p>
         </div>
       </div>`;

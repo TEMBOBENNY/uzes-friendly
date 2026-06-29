@@ -8,6 +8,26 @@ import {
   query, where, orderBy, serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// Event delegation for all dynamically-generated action buttons
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-action^='is:']");
+  if (!el) return;
+  const d = el.dataset;
+  switch (d.action) {
+    case "is:approve":          window.doApprove(d.id, true); break;
+    case "is:preview-letter":   window.previewLetter(d.id); break;
+    case "is:show-reject":      window.showRejectForm(d.id); break;
+    case "is:do-reject":        window.doReject(d.id); break;
+    case "is:hide-reject":      window.hideRejectForm(d.id); break;
+    case "is:del-ph":           window.deletePh(d.id); break;
+    case "is:del-placement-ph": window.deletePlacementPh(d.id); break;
+    case "is:assign":           window.assignVacancy(d.id); break;
+    case "is:del-vacancy":      window.deleteVacancy(d.id); break;
+    case "is:ts-approve":       window.approvePlacement(d.uid); break;
+    case "is:ts-reject":        window.rejectPlacementNopenalty(d.uid); break;
+  }
+});
+
 const DEPARTMENTS = [
   "Electrical and Electronic Engineering",
   "Mechanical Engineering",
@@ -349,19 +369,19 @@ function renderReqCard(id, r, mode) {
   const actions = mode === "pending" ? `
     <div class="req-actions">
       <div id="ra-btns-${id}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <button class="btn-approve" onclick="doApprove('${id}',true)" id="ra-app-${id}">Approve &amp; send letter</button>
-        <button class="btn-ghost" style="font-size:12px;padding:7px 14px" onclick="previewLetter('${id}')">Preview letter</button>
-        <button class="btn-reject-sm" onclick="showRejectForm('${id}')">Reject</button>
+        <button class="btn-approve" data-action="is:approve" data-id="${id}" id="ra-app-${id}">Approve &amp; send letter</button>
+        <button class="btn-ghost" style="font-size:12px;padding:7px 14px" data-action="is:preview-letter" data-id="${id}">Preview letter</button>
+        <button class="btn-reject-sm" data-action="is:show-reject" data-id="${id}">Reject</button>
       </div>
       <div id="ra-rej-${id}" style="display:none;width:100%" class="reject-form">
         <input class="reject-input" id="rej-reason-${id}" placeholder="Reason for rejection…">
-        <button class="btn-reject-confirm" onclick="doReject('${id}')">Send rejection</button>
-        <button class="btn-ghost" style="font-size:12px;padding:6px 10px" onclick="hideRejectForm('${id}')">Cancel</button>
+        <button class="btn-reject-confirm" data-action="is:do-reject" data-id="${id}">Send rejection</button>
+        <button class="btn-ghost" style="font-size:12px;padding:6px 10px" data-action="is:hide-reject" data-id="${id}">Cancel</button>
       </div>
       <p id="ra-err-${id}" class="action-err"></p>
     </div>` : `
     <div class="req-actions">
-      <button class="btn-ghost" style="font-size:12px;padding:7px 14px" onclick="previewLetter('${id}')">View letter</button>
+      <button class="btn-ghost" style="font-size:12px;padding:7px 14px" data-action="is:preview-letter" data-id="${id}">View letter</button>
     </div>`;
 
   return `<div class="req-card" id="req-card-${id}" data-req-id="${id}">
@@ -819,7 +839,7 @@ function renderPhList() {
       <span class="ph-key">{${esc(p.key)}}</span>
       <span class="ph-lbl">${esc(p.label)}</span>
       ${p.required ? '<span class="ph-req-badge">required</span>' : ''}
-      <button class="btn-del-ph" onclick="deletePh('${p.id}')">Remove</button>
+      <button class="btn-del-ph" data-action="is:del-ph" data-id="${p.id}">Remove</button>
     </div>`).join("");
 }
 
@@ -884,7 +904,7 @@ function renderPlacementPhList() {
       <span class="ph-key">{${esc(p.key)}}</span>
       <span class="ph-lbl">${esc(p.label)}</span>
       ${p.required ? '<span class="ph-req-badge">required</span>' : ''}
-      <button class="btn-del-ph" onclick="deletePlacementPh('${p.id}')">Remove</button>
+      <button class="btn-del-ph" data-action="is:del-placement-ph" data-id="${p.id}">Remove</button>
     </div>`).join("");
 }
 
@@ -951,10 +971,10 @@ function renderVacancyCard(id, v) {
     </div>
     <div class="req-actions">
       ${remaining > 0
-        ? `<button class="btn-approve" id="assign-${id}" onclick="assignVacancy('${id}')">Assign Now</button>`
+        ? `<button class="btn-approve" id="assign-${id}" data-action="is:assign" data-id="${id}">Assign Now</button>`
         : `<span class="muted small" style="font-size:12px;color:var(--ok)">All slots filled</span>`
       }
-      <button class="btn-danger-sm" style="font-size:12px;padding:6px 12px" onclick="deleteVacancy('${id}')">Delete</button>
+      <button class="btn-danger-sm" style="font-size:12px;padding:6px 12px" data-action="is:del-vacancy" data-id="${id}">Delete</button>
       <p id="assign-err-${id}" class="action-err" style="width:100%;margin:4px 0 0"></p>
     </div>
   </div>`;
@@ -1067,8 +1087,8 @@ function renderTSReviewCard(uid, placement, student, company) {
     </div>
     ${cvLink ? `<div style="display:flex;justify-content:flex-end;padding:6px 0 4px">${cvLink}</div>` : ""}
     <div class="req-actions">
-      <button class="btn-approve" id="ts-approve-${uid}" onclick="approvePlacement('${uid}')">Approve &amp; Send Letter</button>
-      <button class="btn-danger-sm" id="ts-reject-${uid}" onclick="rejectPlacementNopenalty('${uid}')">Reject (no penalty)</button>
+      <button class="btn-approve" id="ts-approve-${uid}" data-action="is:ts-approve" data-uid="${uid}">Approve &amp; Send Letter</button>
+      <button class="btn-danger-sm" id="ts-reject-${uid}" data-action="is:ts-reject" data-uid="${uid}">Reject (no penalty)</button>
       <p id="ts-review-err-${uid}" class="action-err" style="width:100%;margin:4px 0 0"></p>
     </div>
   </div>`;

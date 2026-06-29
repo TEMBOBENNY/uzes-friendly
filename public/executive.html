@@ -329,7 +329,7 @@
           Upload a clear image on a white or transparent background.
         </p>
 
-        <div class="sig-box" id="sigBox" onclick="document.getElementById('sigInput').click()">
+        <div class="sig-box" id="sigBox">
           <img id="sigPreview" class="sig-preview" alt="Current signature">
           <span class="sig-placeholder" id="sigPlaceholder">Click to upload your signature (PNG/JPG)</span>
         </div>
@@ -475,10 +475,10 @@
     <!-- ── Library Moderation tab (Sec Gen, Vice Sec Gen, Admin) ─────── -->
     <div id="tab-library-mod" class="tab-panel hidden" style="margin-top:16px">
       <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-        <button id="lib-mod-tab-pending" class="btn-sm lib-mod-tab active-mod-tab" onclick="switchLibModTab('pending')">Pending review</button>
-        <button id="lib-mod-tab-flagged" class="btn-sm lib-mod-tab" onclick="switchLibModTab('flagged')">Flagged / Reported</button>
-        <button id="lib-mod-tab-bulk"    class="btn-sm lib-mod-tab" onclick="switchLibModTab('bulk')">Bulk Upload</button>
-        <button id="lib-mod-tab-courses" class="btn-sm lib-mod-tab" onclick="switchLibModTab('courses')">Manage Courses</button>
+        <button id="lib-mod-tab-pending" class="btn-sm lib-mod-tab active-mod-tab">Pending review</button>
+        <button id="lib-mod-tab-flagged" class="btn-sm lib-mod-tab">Flagged / Reported</button>
+        <button id="lib-mod-tab-bulk"    class="btn-sm lib-mod-tab">Bulk Upload</button>
+        <button id="lib-mod-tab-courses" class="btn-sm lib-mod-tab">Manage Courses</button>
       </div>
       <div id="libModList">
         <div class="sk sk-card" style="height:120px;margin-bottom:10px"></div>
@@ -496,7 +496,7 @@
       <p class="footer-copy">&copy; <span id="footerYear"></span> UZES · <a href="mailto:uzesofficial@gmail.com">uzesofficial@gmail.com</a></p>
     </div>
   </footer>
-  <script>document.getElementById("footerYear").textContent = new Date().getFullYear();</script>
+  <script src="js/init.js"></script>
 
   <!-- Verify Receipt FAB (role=executive only — hidden until JS confirms role) -->
   <button id="verifyBtn" class="verify-fab" style="display:none" aria-label="Scan receipt QR code to verify">

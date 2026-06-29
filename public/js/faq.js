@@ -3,6 +3,12 @@ import {
   collection, getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// Event delegation (onclick attr removed from template for CSP compliance)
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-action='fq:toggle']");
+  if (el) window.toggleFaq(el.dataset.fid);
+});
+
 async function init() {
   const container = document.getElementById("faqContainer");
   try {
@@ -35,7 +41,7 @@ async function init() {
       parts.push(`<div class="faq-category">${cat}</div>`);
       faqItems.forEach(item => {
         parts.push(`<div class="faq-item" id="faq-${item.id}">
-          <button class="faq-question" onclick="toggleFaq('${item.id}')">
+          <button class="faq-question" data-action="fq:toggle" data-fid="${item.id}">
             <span>${item.question || "—"}</span>
             <span class="faq-chevron">&#8964;</span>
           </button>

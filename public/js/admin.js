@@ -19,6 +19,19 @@ import {
   signOut as secondarySignOut, deleteUser
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
+// Event delegation for dynamically-generated secretary management buttons
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-action^='ad:']");
+  if (!el) return;
+  const d = el.dataset;
+  switch (d.action) {
+    case "ad:toggle-sec":     window.toggleSecretary(d.id, d.active === "true"); break;
+    case "ad:show-pw-reset":  window.showSecPwReset(d.id); break;
+    case "ad:do-pw-reset":    window.doSecPwReset(d.id); break;
+    case "ad:cancel-pw-reset": document.getElementById("secPwResetForm").style.display = "none"; break;
+  }
+});
+
 // Secondary Firebase app for creating accounts WITHOUT disturbing the admin's
 // own login. In-memory persistence keeps it fully isolated from the primary
 // app's auth storage — otherwise creating/signing-out here clobbers the admin's
@@ -1247,17 +1260,17 @@ function renderSecretaryExists(sec, statusEl) {
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button id="secToggleBtn" class="btn-sm ${sec.active === false ? "" : "danger"}"
-        onclick="toggleSecretary('${sec.id}', ${sec.active !== false})">
+        data-action="ad:toggle-sec" data-id="${esc(sec.id)}" data-active="${sec.active !== false}">
         ${sec.active === false ? "Reactivate account" : "Disable account"}
       </button>
-      <button class="btn-sm" onclick="showSecPwReset('${sec.id}')">Reset password</button>
+      <button class="btn-sm" data-action="ad:show-pw-reset" data-id="${esc(sec.id)}">Reset password</button>
     </div>
     <div id="secPwResetForm" style="display:none;margin-top:12px;max-width:320px">
       <label for="secNewPw" style="font-size:13px">New password</label>
       <input id="secNewPw" type="password" placeholder="Min 6 characters" style="margin-bottom:8px">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn-primary" style="width:auto;padding:8px 18px;margin-top:0" onclick="doSecPwReset('${sec.id}')">Set password</button>
-        <button class="btn-ghost" style="font-size:12px;margin-top:0" onclick="document.getElementById('secPwResetForm').style.display='none'">Cancel</button>
+        <button class="btn-primary" style="width:auto;padding:8px 18px;margin-top:0" data-action="ad:do-pw-reset" data-id="${esc(sec.id)}">Set password</button>
+        <button class="btn-ghost" style="font-size:12px;margin-top:0" data-action="ad:cancel-pw-reset">Cancel</button>
         <p id="secPwResetMsg" style="font-size:12px;margin:0"></p>
       </div>
     </div>

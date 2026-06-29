@@ -6,6 +6,11 @@ import {
   serverTimestamp, getDocs, deleteField
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// Event delegation (onclick attr removed from template for CSP compliance)
+document.addEventListener("click", e => {
+  if (e.target.closest("#cvDropZone")) document.getElementById("cvInput")?.click();
+});
+
 let _user, _profile;
 let _placement = null; // Current placement doc data
 let _unsubPlace = null; // Real-time listener
@@ -130,7 +135,7 @@ function renderPendingForm() {
       <div style="margin-bottom:16px">
         <label style="display:block;font-weight:600;margin-bottom:6px">CV (PDF, DOC, or DOCX)</label>
         <div style="border:2px dashed var(--line);border-radius:8px;padding:20px;text-align:center;cursor:pointer;background:#f8fafc;transition:border-color .15s"
-          id="cvDropZone" onclick="document.getElementById('cvInput').click()">
+          id="cvDropZone">
           <p style="margin:0;color:var(--muted);font-size:14px" id="cvLabel">
             ${p.cvUrl ? "✓ CV uploaded" : "Click to upload or drag and drop"}
           </p>

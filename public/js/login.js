@@ -6,6 +6,8 @@ import { doc, getDoc }
 import { routeByRole, findProfileCollection } from "./guard.js";
 import { verifyTOTP } from "./totp.js";
 import { audit } from "./audit.js";
+import { UPLOAD_WORKER_URL } from "./config.js";
+import { authHeaders } from "./upload.js";
 
 // Load a signed-in user's profile from whichever collection holds it.
 async function loadProfile(uid) {
@@ -126,7 +128,25 @@ function promptTotp(secret) {
 
     async function verify() {
       err.textContent = "";
-      if (await verifyTOTP(secret, input.value)) { close(true); }
+      const code = input.value.trim();
+      let ok;
+      if (secret.includes(":")) {
+        // Encrypted secret: verify server-side
+        try {
+          const res = await fetch(UPLOAD_WORKER_URL + "/totp/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+            body: JSON.stringify({ encryptedSecret: secret, code }),
+          });
+          if (res.status === 429) { err.textContent = "Too many attempts. Please wait 15 minutes."; return; }
+          const data = await res.json();
+          ok = data.valid === true;
+        } catch (_) { err.textContent = "Verification error — check your connection."; return; }
+      } else {
+        // Legacy plaintext secret (backward compat)
+        ok = await verifyTOTP(secret, code);
+      }
+      if (ok) { close(true); }
       else { err.textContent = "Incorrect code. Try the latest code from your app."; input.select(); }
     }
   });

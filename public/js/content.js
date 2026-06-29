@@ -7,6 +7,11 @@ import {
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// Event delegation (onclick attr removed from template for CSP compliance)
+document.addEventListener("click", e => {
+  if (e.target.closest("#ct-photoBox")) document.getElementById("ct-photoInput")?.click();
+});
+
 const EXEC_POSITIONS = [
   "Patron (Internal)", "Patron (External)",
   "Chairperson", "Vice Chairperson", "Secretary General", "Vice Secretary General",
@@ -159,7 +164,7 @@ function buildUI() {
           </div>
           <div class="full">
             <label>Photo</label>
-            <div class="photo-upload-box" onclick="document.getElementById('ct-photoInput').click()">
+            <div class="photo-upload-box" id="ct-photoBox">
               <img id="ct-photoPreview" class="photo-preview" style="width:56px;height:56px;border-radius:50%;object-fit:cover;display:none" alt="">
               <div id="ct-photoPlaceholder" class="photo-placeholder">Click to upload photo (JPG/PNG)</div>
             </div>

@@ -6,6 +6,11 @@ import {
   query, orderBy, serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// Event delegation (onclick attr removed from template for CSP compliance)
+document.addEventListener("click", e => {
+  if (e.target.closest("#ae-posterBox")) document.getElementById("ae-posterInput")?.click();
+});
+
 const CATEGORIES = ["Sports", "Cultural", "Academic", "Social", "BENG CUP", "Other"];
 const STATUSES   = ["upcoming", "ongoing", "past", "cancelled"];
 const STATUS_COLORS = {
@@ -93,7 +98,7 @@ function buildUI() {
           </div>
           <div class="full" style="grid-column:1/-1">
             <label>Poster / banner image <span class="muted small">(optional)</span></label>
-            <div class="photo-upload-box" onclick="document.getElementById('ae-posterInput').click()">
+            <div class="photo-upload-box" id="ae-posterBox">
               <img id="ae-posterPreview" style="width:80px;height:56px;object-fit:cover;border-radius:6px;display:none" alt="">
               <span id="ae-posterPlaceholder" class="photo-placeholder">Click to upload poster image (JPG/PNG)</span>
             </div>

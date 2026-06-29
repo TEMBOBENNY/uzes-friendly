@@ -9,6 +9,26 @@ import {
   query, where, limit, serverTimestamp, runTransaction, increment
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// Event delegation for all dynamically-generated clickable elements
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-action^='lib:']");
+  if (!el) return;
+  const d = el.dataset;
+  switch (d.action) {
+    case "lib:nav":        window.navTo(d.nav); break;
+    case "lib:sel-prog":   window.selectProg(d.prog); break;
+    case "lib:sel-year":   window.selectYear(d.year); break;
+    case "lib:sel-course": window.selectCourse(d.course); break;
+    case "lib:sel-sub":    window.selectSub(d.sub); break;
+    case "lib:rate":       window.rateFile(d.fid, parseInt(d.star)); break;
+    case "lib:view-file":  window.viewLibFile(d.fid); break;
+    case "lib:report":     window.openReport(d.fid); break;
+    case "lib:approve":    window.libApprove(d.fid); break;
+    case "lib:restore":    window.libRestore(d.fid); break;
+    case "lib:delete":     window.libDelete(d.fid, d.key); break;
+  }
+});
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PROGRAMMES = [
   "Bachelor of Engineering (Agricultural Engineering)",
@@ -235,11 +255,11 @@ window.selectSub    = (s) => { browse.subfolder=s; renderBrowse(); };
 
 // ── Breadcrumb ────────────────────────────────────────────────────────────────
 function updateBreadcrumb() {
-  const parts = [`<button class="bc-btn" onclick="navTo('programme')">Library</button>`];
+  const parts = [`<button class="bc-btn" data-action="lib:nav" data-nav="programme">Library</button>`];
   const atLevel = (label, nav, isCurrent) => {
     const el = isCurrent
       ? `<span class="bc-current">${esc(label)}</span>`
-      : `<button class="bc-btn" onclick="navTo('${nav}')">${esc(label)}</button>`;
+      : `<button class="bc-btn" data-action="lib:nav" data-nav="${nav}">${esc(label)}</button>`;
     return `<span class="bc-sep">/</span>${el}`;
   };
   if (browse.programme) parts.push(atLevel(PROG_SHORT[browse.programme] || browse.programme, "year", !browse.year));
@@ -273,7 +293,7 @@ function renderProgrammes() {
   const progs = [...new Set(allCourses.map(c => c.programme))].sort();
   const cards = progs.map(p => {
     const count = allCourses.filter(c => c.programme === p).length;
-    return `<div class="browse-card" onclick="selectProg(${esc(JSON.stringify(p))})">
+    return `<div class="browse-card" data-action="lib:sel-prog" data-prog="${esc(p)}">
       <div class="browse-icon">${PROG_ICO[p]||ICO.fold}</div>
       <div class="browse-label">${esc(PROG_SHORT[p]||p)}</div>
       <div class="browse-sub muted">${count} courses</div>
@@ -289,7 +309,7 @@ function renderYears() {
   const cards = available.map(y => {
     const count = allCourses.filter(c => c.programme === browse.programme && c.year === y).length;
     const note  = (y === "1st Year" || y === "2nd Year") ? " — Common" : "";
-    return `<div class="browse-card" onclick="selectYear(${esc(JSON.stringify(y))})">
+    return `<div class="browse-card" data-action="lib:sel-year" data-year="${esc(y)}">
       <div class="browse-icon">${ICO.cal}</div>
       <div class="browse-label">${esc(y)}${note}</div>
       <div class="browse-sub muted">${count} courses</div>
@@ -307,7 +327,7 @@ function renderCourses() {
     return;
   }
   const chips = courses.map(c =>
-    `<div class="course-chip" onclick="selectCourse(${esc(JSON.stringify(c.courseName))})">${esc(c.courseName)}</div>`
+    `<div class="course-chip" data-action="lib:sel-course" data-course="${esc(c.courseName)}">${esc(c.courseName)}</div>`
   ).join("");
   setContainer(`<p class="lib-section-head">Select course</p><div class="course-grid">${chips}</div>`);
 }
@@ -315,7 +335,7 @@ function renderCourses() {
 function renderSubfolders() {
   const subs = ["Exam and Test Past Papers","Exam and Test Solutions","Text Books","Others"];
   const cards = subs.map(s =>
-    `<div class="browse-card" onclick="selectSub(${esc(JSON.stringify(s))})">
+    `<div class="browse-card" data-action="lib:sel-sub" data-sub="${esc(s)}">
       <div class="browse-icon">${SUB_ICO[s]||ICO.fold}</div>
       <div class="browse-label">${esc(s)}</div>
     </div>`
@@ -391,7 +411,7 @@ function fileCardHTML(f, myRating) {
   const stars = [1,2,3,4,5].map(i => {
     const filled = i <= Math.round(avg);
     return `<button class="star${filled?" filled":""}" data-star="${i}"
-      onclick="rateFile('${esc(f.id)}',${i})" title="${i} star${i>1?"s":""}">${filled?"★":"☆"}</button>`;
+      data-action="lib:rate" data-fid="${esc(f.id)}" title="${i} star${i>1?"s":""}">${filled?"★":"☆"}</button>`;
   }).join("");
 
   const fid = esc(f.id);
@@ -399,11 +419,11 @@ function fileCardHTML(f, myRating) {
   // Show view/download for approved files AND for reported-but-flagged files (reporter can still view).
   const canView    = f.fileUrl && ((f.moderationStatus === "approved" && !f.isFlagged) || iReported);
   const downloadBtn = canView
-    ? `<button id="dl-${fid}" class="btn-lib primary" onclick="viewLibFile('${fid}')">${isViewable ? ICO.icoView + " View" : ICO.icoDl + " Download"}</button>`
+    ? `<button id="dl-${fid}" class="btn-lib primary" data-action="lib:view-file" data-fid="${fid}">${isViewable ? ICO.icoView + " View" : ICO.icoDl + " Download"}</button>`
     : "";
 
   const reportBtn = (f.moderationStatus === "approved" && !f.isFlagged && !iReported)
-    ? `<button id="rpt-btn-${fid}" class="btn-lib" onclick="openReport('${fid}')">${ICO.icoFlag} Report</button>`
+    ? `<button id="rpt-btn-${fid}" class="btn-lib" data-action="lib:report" data-fid="${fid}">${ICO.icoFlag} Report</button>`
     : (iReported
       ? `<button id="rpt-btn-${fid}" class="btn-lib" disabled style="opacity:0.7;cursor:default">Already Reported</button>`
       : "");
@@ -411,12 +431,12 @@ function fileCardHTML(f, myRating) {
   let modBtns = "";
   if (isLibrarian) {
     if (f.moderationStatus === "under_review" && !f.isFlagged) {
-      modBtns += `<button class="btn-lib approve" onclick="libApprove('${fid}')">${ICO.icoOk} Approve</button>`;
+      modBtns += `<button class="btn-lib approve" data-action="lib:approve" data-fid="${fid}">${ICO.icoOk} Approve</button>`;
     }
     if (f.isFlagged) {
-      modBtns += `<button class="btn-lib" onclick="libRestore('${fid}')">${ICO.icoUndo} Restore</button>`;
+      modBtns += `<button class="btn-lib" data-action="lib:restore" data-fid="${fid}">${ICO.icoUndo} Restore</button>`;
     }
-    modBtns += `<button class="btn-lib danger" onclick="libDelete('${fid}','${esc(f.r2Key||"")}')">${ICO.icoDel} Delete</button>`;
+    modBtns += `<button class="btn-lib danger" data-action="lib:delete" data-fid="${fid}" data-key="${esc(f.r2Key||"")}">${ICO.icoDel} Delete</button>`;
   }
 
   const myRatingNote = myRating
@@ -636,6 +656,9 @@ function initUploadModal() {
     selectedFile = fileEl.files[0] || null;
     dropText.textContent = selectedFile ? selectedFile.name : "Click or drag a file here";
   });
+
+  // Click-to-pick (onclick removed from HTML for CSP compliance)
+  dropZone.addEventListener("click", () => fileEl.click());
 
   // Drag-drop
   dropZone.addEventListener("dragover",  e => { e.preventDefault(); dropZone.classList.add("dragover"); });

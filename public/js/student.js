@@ -28,6 +28,14 @@ const historyList = document.getElementById("historyList");
 
 let currentUser, currentProfile;
 
+// Event delegation (onclick attrs removed for CSP compliance)
+document.addEventListener("click", e => {
+  const tab = e.target.closest("[data-show-tab]");
+  if (tab) { window.shShowTab?.(tab.dataset.showTab); return; }
+  const vp = e.target.closest("[data-action='st:view-proof']");
+  if (vp) window.viewProof(vp.dataset.url);
+});
+
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 protect(["student"], (user, profile) => {
   currentUser = user; currentProfile = profile;
@@ -451,7 +459,7 @@ function renderHistoryList(payments) {
         ${p.status === "rejected" && p.rejectionReason
           ? `<span class="muted small">Reason: ${esc(p.rejectionReason)}</span>` : ""}
         ${p.status === "confirmed" && p.proofUrl
-          ? `<button class="muted small" style="border:none;background:none;cursor:pointer;padding:0;font-size:inherit;color:var(--green);text-decoration:underline" onclick="viewProof('${esc(p.proofUrl)}')">View proof</button>` : ""}
+          ? `<button class="muted small" style="border:none;background:none;cursor:pointer;padding:0;font-size:inherit;color:var(--green);text-decoration:underline" data-action="st:view-proof" data-url="${esc(p.proofUrl)}">View proof</button>` : ""}
       </div>
     </div>`;
   }).join("");

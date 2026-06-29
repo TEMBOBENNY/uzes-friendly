@@ -262,7 +262,7 @@
         </div>
         <h2>Members only</h2>
         <p style="color:var(--muted);font-size:14px;margin-bottom:20px">The UZES Engineering Library is available to members who have paid their <strong>Membership Dues</strong>. Once your payment is confirmed by an executive, you will have full access.</p>
-        <button onclick="window.shShowTab && window.shShowTab('tab-fin')" class="btn-primary" style="width:auto;padding:11px 28px;border:none;cursor:pointer">Pay Membership Dues &rarr;</button>
+        <button data-show-tab="tab-fin" class="btn-primary" style="width:auto;padding:11px 28px;border:none;cursor:pointer">Pay Membership Dues &rarr;</button>
       </div>
 
       <!-- Main library (skeleton shows while initLibrary runs) -->
@@ -312,7 +312,7 @@
               <option value="Others">Others</option>
             </select>
             <label>File <span class="muted small">(PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, TXT, ZIP, PNG, JPG &mdash; max 50 MB)</span></label>
-            <div class="drop-zone" id="dropZone" onclick="document.getElementById('filePickEl').click()">
+            <div class="drop-zone" id="dropZone">
               <div class="drop-zone-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg></div>
               <p class="drop-zone-text" id="dropZoneText">Click or drag a file here</p>
             </div>
@@ -378,7 +378,7 @@
           </div>
           <h2>Members only</h2>
           <p>The Attachment Letter Request is available to paid-up UZES members. Pay your Membership Dues first, then return here once an executive confirms your payment.</p>
-          <button onclick="window.shShowTab && window.shShowTab('tab-fin')" class="btn-primary" style="width:auto;padding:11px 28px;border:none;cursor:pointer;margin-top:8px">Pay Membership Dues &rarr;</button>
+          <button data-show-tab="tab-fin" class="btn-primary" style="width:auto;padding:11px 28px;border:none;cursor:pointer;margin-top:8px">Pay Membership Dues &rarr;</button>
         </div>
       </div>
 
@@ -474,7 +474,7 @@
           </div>
           <h2 style="margin-bottom:8px">Request submitted!</h2>
           <p class="muted" style="font-size:14px">Your attachment letter request has been sent to the Industrial Training Secretary. You will receive your letter by email once it is approved.</p>
-          <button onclick="window.shShowTab && window.shShowTab('tab-dash')" class="btn-primary" style="width:auto;padding:11px 28px;border:none;cursor:pointer;margin-top:16px">Back to dashboard</button>
+          <button data-show-tab="tab-dash" class="btn-primary" style="width:auto;padding:11px 28px;border:none;cursor:pointer;margin-top:16px">Back to dashboard</button>
         </div>
       </div>
     </div>
@@ -492,7 +492,7 @@
       <p class="footer-copy">&copy; <span id="footerYear"></span> UZES · <a href="mailto:uzesofficial@gmail.com">uzesofficial@gmail.com</a></p>
     </div>
   </footer>
-  <script>document.getElementById("footerYear").textContent = new Date().getFullYear();</script>
+  <script src="js/init.js"></script>
 
   <script type="module" src="js/student.js?v=13"></script>
   <script src="js/chrome.js"></script>

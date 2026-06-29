@@ -32,6 +32,8 @@ import {
   reauthenticateWithCredential, EmailAuthProvider, updatePassword
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { generateSecret, verifyTOTP, otpauthURI, loadQR } from "./totp.js";
+import { UPLOAD_WORKER_URL } from "./config.js";
+import { authHeaders } from "./upload.js";
 
 function esc(s) {
   return String(s ?? "")
@@ -295,10 +297,18 @@ function mount2FABox(user, profile) {
       const code = document.getElementById("acc2faCode").value;
       msg.style.color = "var(--danger)";
       if (!(await verifyTOTP(secret, code))) { msg.textContent = "That code isn't valid yet — check the app and try again."; return; }
-      msg.style.color = "var(--muted)"; msg.textContent = "Saving…";
+      msg.style.color = "var(--muted)"; msg.textContent = "Encrypting…";
       try {
-        await updateDoc(doc(db, col(), user.uid), { totpEnabled: true, totpSecret: secret });
-        profile.totpEnabled = true; profile.totpSecret = secret;
+        const res = await fetch(UPLOAD_WORKER_URL + "/totp/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+          body: JSON.stringify({ secret }),
+        });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "Encryption failed"); }
+        const { encryptedSecret } = await res.json();
+        msg.textContent = "Saving…";
+        await updateDoc(doc(db, col(), user.uid), { totpEnabled: true, totpSecret: encryptedSecret });
+        profile.totpEnabled = true; profile.totpSecret = encryptedSecret;
         renderEnabled();
       } catch (err) { msg.style.color = "var(--danger)"; msg.textContent = err.message; }
     });
