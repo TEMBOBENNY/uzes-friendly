@@ -241,22 +241,13 @@
       <div class="card" style="max-width:560px">
         <p class="section-head">Email relay</p>
         <p class="muted small" style="margin-bottom:14px">
-          The relay URL and token are stored in Firestore — never in source code.
-          Only executives can read them. After saving the token here, paste the
-          same value as the <strong>RELAY_TOKEN</strong> script property in your
-          Apps Script editor (Project Settings → Script properties).
+          Emails now route through the Cloudflare Worker — the Apps Script URL and token
+          are never stored in Firestore or source code. Set
+          <strong>EMAIL_RELAY_URL</strong> and <strong>EMAIL_RELAY_TOKEN</strong>
+          as Worker secrets in the Cloudflare dashboard (Workers &amp; Pages → uzes-upload → Settings → Variables and Secrets).
         </p>
         <form id="settingsForm">
-          <label for="relayUrl">Apps Script relay URL</label>
-          <input id="relayUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec"
-            style="margin-bottom:12px">
-          <label for="relayToken">Relay token <span class="muted small">(shared secret)</span></label>
-          <input id="relayToken" type="password" placeholder="Generate a random string and paste here"
-            style="margin-bottom:4px">
-          <p class="muted small" style="margin-bottom:14px">
-            Generate one at: passwordsgenerator.net — use 32+ random characters.
-          </p>
-          <div style="display:flex;align-items:center;gap:8px;margin:16px 0;padding:12px;background:#f0f6f2;border-radius:6px;border-left:3px solid var(--ok)">
+          <div style="display:flex;align-items:center;gap:8px;margin:8px 0 4px;padding:12px;background:#f0f6f2;border-radius:6px;border-left:3px solid var(--ok)">
             <input id="trialMode" type="checkbox" style="width:18px;height:18px;cursor:pointer">
             <label for="trialMode" style="cursor:pointer;margin:0;font-size:14px;font-weight:600">
               Trial mode — add "TRIAL RECEIPT" watermark to all receipts

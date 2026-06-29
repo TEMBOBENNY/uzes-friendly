@@ -814,21 +814,15 @@ function parseCSV(text) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function initSettings() {
-  const form       = document.getElementById("settingsForm");
-  const urlInput   = document.getElementById("relayUrl");
-  const tokenInput = document.getElementById("relayToken");
-  const trialCb    = document.getElementById("trialMode");
-  const errEl      = document.getElementById("settingsErr");
-  const okEl       = document.getElementById("settingsOk");
+  const form    = document.getElementById("settingsForm");
+  const trialCb = document.getElementById("trialMode");
+  const errEl   = document.getElementById("settingsErr");
+  const okEl    = document.getElementById("settingsOk");
 
-  // Load current values from Firestore
+  // Load trial mode flag from Firestore (URL/token are now Worker env vars)
   try {
     const snap = await getDoc(doc(db, "settings", "emailRelay"));
-    if (snap.exists()) {
-      urlInput.value   = snap.data().url   || "";
-      tokenInput.value = snap.data().token || "";
-      trialCb.checked  = snap.data().isTrial === true;
-    }
+    if (snap.exists()) trialCb.checked = snap.data().isTrial === true;
   } catch (_) {}
 
   form.addEventListener("submit", async (e) => {
@@ -838,10 +832,8 @@ async function initSettings() {
     btn.disabled = true; btn.textContent = "Saving…";
     try {
       await setDoc(doc(db, "settings", "emailRelay"), {
-        url:     urlInput.value.trim(),
-        token:   tokenInput.value.trim(),
         isTrial: trialCb.checked
-      });
+      }, { merge: true });
       okEl.textContent = "Settings saved.";
     } catch (err) {
       errEl.textContent = "Failed: " + err.message;

@@ -163,7 +163,7 @@ service cloud.firestore {
       // to trigger their own placement letter after accepting.
       // All other settings are exec-only.
       allow read:  if id == 'adminApi'    ? isAdmin()
-                 : id == 'emailRelay'    ? (signedIn() && myActive())
+                 : id == 'emailRelay'    ? isExec()
                  : isExec();
       allow write: if isAdmin();
     }

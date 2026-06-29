@@ -1,5 +1,6 @@
 import { auth, db } from "./firebase.js";
-import { uploadCV, deleteUpload } from "./upload.js";
+import { uploadCV, deleteUpload, authHeaders } from "./upload.js";
+import { UPLOAD_WORKER_URL } from "./config.js";
 import {
   collection, doc, getDoc, setDoc, updateDoc, onSnapshot, query, where,
   serverTimestamp, getDocs, deleteField
@@ -509,17 +510,15 @@ async function doAccept(modal, placeholders, company) {
     }
 
     // Auto mode: send letter immediately and confirm
-    const relaySnap = await getDoc(doc(db, "settings", "emailRelay"));
-    const { url, token } = relaySnap.exists() ? relaySnap.data() : {};
-
-    if (!url) throw new Error("Email relay not configured.");
-
-    await fetch(url, {
+    const res = await fetch(UPLOAD_WORKER_URL + "/send-email", {
       method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ _token: token || "", ...payload })
+      headers: { "Content-Type": "application/json", ...await authHeaders() },
+      body: JSON.stringify(payload)
     });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.error || "Failed to send placement letter — please contact the secretary.");
+    }
 
     await updateDoc(doc(db, "placements", _user.uid), {
       placementStatus: "confirmed",

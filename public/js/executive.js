@@ -13,15 +13,11 @@ import {
 import { ORG, UPLOAD_WORKER_URL } from "./config.js";
 import { sendPush } from "./fcm.js";
 
-// Relay config loaded once from Firestore (not in source code)
-let _relayConfig = null;
-async function getRelayConfig() {
-  _relayConfig = null;   // always fetch fresh to catch trial mode changes
+async function getTrialMode() {
   try {
     const snap = await getDoc(doc(db, "settings", "emailRelay"));
-    _relayConfig = snap.exists() ? snap.data() : {};
-  } catch (_) { _relayConfig = {}; }
-  return _relayConfig;
+    return snap.exists() ? (snap.data().isTrial === true) : false;
+  } catch (_) { return false; }
 }
 
 const pendingList = document.getElementById("pendingList");
@@ -471,22 +467,20 @@ window.confirmPayment = async (payId) => {
       confirmedAt:      serverTimestamp()
     }).catch(e => console.warn("Verification record:", e.message));
 
-    getRelayConfig().then(async ({ url, token, isTrial }) => {
-      if (!url) return;
+    getTrialMode().then(async isTrial => {
       try {
         const signatureB64 = await urlToBase64(currentProfile.signatureUrl || "");
-        await fetch(url, {
-          method: "POST", mode: "no-cors",
-          headers: { "Content-Type": "text/plain" },
+        await fetch(UPLOAD_WORKER_URL + "/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...await authHeaders() },
           body: JSON.stringify({
-            _token: token || "",
             to: p.studentEmail, studentName: p.studentName, compNumber: p.compNumber,
             amount: p.amount, amountInWords: p.amountInWords, category: p.category,
             method: p.method, txRef: p.txRef, receiptNo: p.receiptNo,
             reviewerName: p.reviewerName, reviewerPosition: p.reviewerPosition,
             signatureB64,
             reviewedAt: new Date().toLocaleDateString("en-ZM", { day:"2-digit", month:"long", year:"numeric" }),
-            isTrial: isTrial === true,
+            isTrial,
             verifyUrl,
             org: ORG
           })
@@ -550,14 +544,12 @@ window.confirmReject = async (payId) => {
       reviewedAt: serverTimestamp()
     });
 
-    getRelayConfig().then(async ({ url, token }) => {
-      if (!url) return;
+    authHeaders().then(async hdrs => {
       try {
-        await fetch(url, {
-          method: "POST", mode: "no-cors",
-          headers: { "Content-Type": "text/plain" },
+        await fetch(UPLOAD_WORKER_URL + "/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...hdrs },
           body: JSON.stringify({
-            _token: token || "",
             type: "reject", to: p.studentEmail,
             studentName: p.studentName, amount: p.amount, category: p.category, reason,
             reviewerName: currentProfile.name || currentUser.email,
@@ -1812,16 +1804,13 @@ window.sgApprovePlacement = async (uid) => {
     const placementSnap = await getDoc(doc(db, "placements", uid));
     if (!placementSnap.exists()) throw new Error("Placement not found.");
     const placement = placementSnap.data();
-    const [studentSnap, companySnap, templSnap, relaySnap] = await Promise.all([
+    const [studentSnap, companySnap, templSnap] = await Promise.all([
       getDoc(doc(db, "students", uid)),
       getDoc(doc(db, "vacancies", placement.matchedCompanyId)),
       getDoc(doc(db, "siteContent", "placementLetterTemplates")),
-      getDoc(doc(db, "settings", "emailRelay"))
     ]);
     const student = studentSnap.exists() ? studentSnap.data() : {};
     const company = companySnap.exists() ? companySnap.data() : {};
-    const { url, token } = relaySnap.exists() ? relaySnap.data() : {};
-    if (!url) throw new Error("Email relay not configured.");
     let templateDocUrl = "";
     if (templSnap.exists()) {
       const t = templSnap.data();
@@ -1842,11 +1831,11 @@ window.sgApprovePlacement = async (uid) => {
     if (card) card.innerHTML = `<div style="padding:12px 14px;color:var(--ok);font-weight:600">✓ Placement confirmed — letter being sent to ${sgEsc(student.email || "student")}.</div>`;
 
     if (student.fcmToken) sendPush(student.fcmToken, "Placement Confirmed!", `Your ${company.type || "industrial"} placement at ${company.companyName || "a company"} has been confirmed.`);
-    fetch(url, {
-      method: "POST", mode: "no-cors",
-      headers: { "Content-Type": "text/plain" },
+    fetch(UPLOAD_WORKER_URL + "/send-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...await authHeaders() },
       body: JSON.stringify({
-        _token: token || "", type: "placement_letter",
+        type: "placement_letter",
         to: student.email || "", studentName: student.name || "",
         studentNumber: student.compNumber || "", department: student.department || "",
         yearOfStudy: student.yearOfStudy || "", gender: student.gender || "",
