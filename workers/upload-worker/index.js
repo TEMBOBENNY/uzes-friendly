@@ -16,7 +16,7 @@
  * POST /totp/verify             → decrypts a TOTP secret and verifies a 6-digit code
  *   Env secrets: TOTP_ENCRYPTION_KEY
  * POST /email                   → routes email through the Worker to Apps Script
- *   Env secrets: EMAIL_RELAY_URL, RELAY_TOKEN
+ *   Env secrets: EMAIL_RELAY_URL, EMAIL_RELAY_TOKEN
  * POST /csp-report              → accepts CSP violation reports (returns 200)
  */
 
@@ -722,7 +722,7 @@ async function handleEmail(request, env, origin) {
   let user;
   try { user = await requireUser(request); }
   catch (e) { return json({ error: "Unauthorized — " + e.message }, 401, origin); }
-  if (!env.EMAIL_RELAY_URL || !env.RELAY_TOKEN) {
+  if (!env.EMAIL_RELAY_URL || !env.EMAIL_RELAY_TOKEN) {
     return json({ error: "Email relay not configured on Worker" }, 500, origin);
   }
   const ip = request.headers.get("CF-Connecting-IP") || "";
@@ -737,7 +737,7 @@ async function handleEmail(request, env, origin) {
     const res = await fetch(env.EMAIL_RELAY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ _token: env.RELAY_TOKEN, ...payload })
+      body: JSON.stringify({ _token: env.EMAIL_RELAY_TOKEN, ...payload })
     });
     const data = await res.json().catch(() => ({}));
     // Apps Script always returns HTTP 200 — must also check the ok field in the body
