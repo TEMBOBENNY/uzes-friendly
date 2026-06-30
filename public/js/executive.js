@@ -525,7 +525,7 @@ window.confirmPayment = async (payId) => {
     getTrialMode().then(async isTrial => {
       try {
         const signatureB64 = await urlToBase64(currentProfile.signatureUrl || "");
-        await fetch(UPLOAD_WORKER_URL + "/send-email", {
+        await fetch(UPLOAD_WORKER_URL + "/email", {
           method: "POST",
           headers: { "Content-Type": "application/json", ...await authHeaders() },
           body: JSON.stringify({
@@ -601,7 +601,7 @@ window.confirmReject = async (payId) => {
 
     authHeaders().then(async hdrs => {
       try {
-        await fetch(UPLOAD_WORKER_URL + "/send-email", {
+        await fetch(UPLOAD_WORKER_URL + "/email", {
           method: "POST",
           headers: { "Content-Type": "application/json", ...hdrs },
           body: JSON.stringify({
@@ -1886,7 +1886,7 @@ window.sgApprovePlacement = async (uid) => {
     if (card) card.innerHTML = `<div style="padding:12px 14px;color:var(--ok);font-weight:600">✓ Placement confirmed — letter being sent to ${sgEsc(student.email || "student")}.</div>`;
 
     if (student.fcmToken) sendPush(student.fcmToken, "Placement Confirmed!", `Your ${company.type || "industrial"} placement at ${company.companyName || "a company"} has been confirmed.`);
-    fetch(UPLOAD_WORKER_URL + "/send-email", {
+    fetch(UPLOAD_WORKER_URL + "/email", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...await authHeaders() },
       body: JSON.stringify({

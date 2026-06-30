@@ -1109,17 +1109,14 @@ window.approvePlacement = async (uid) => {
     if (!placementSnap.exists()) throw new Error("Placement not found.");
     const placement = placementSnap.data();
 
-    const [studentSnap, companySnap, templSnap, relaySnap] = await Promise.all([
+    const [studentSnap, companySnap, templSnap] = await Promise.all([
       getDoc(doc(db, "students", uid)),
       getDoc(doc(db, "vacancies", placement.matchedCompanyId)),
-      getDoc(doc(db, "siteContent", "placementLetterTemplates")),
-      getDoc(doc(db, "settings", "emailRelay"))
+      getDoc(doc(db, "siteContent", "placementLetterTemplates"))
     ]);
 
     const student = studentSnap.exists() ? studentSnap.data() : {};
     const company = companySnap.exists() ? companySnap.data() : {};
-    const { url, token } = relaySnap.exists() ? relaySnap.data() : {};
-    if (!url) throw new Error("Email relay not configured.");
 
     let templateDocUrl = "";
     if (templSnap.exists()) {
@@ -1164,11 +1161,7 @@ window.approvePlacement = async (uid) => {
 
     if (student.fcmToken) sendPush(student.fcmToken, "Placement Confirmed!", `Your ${company.type || "industrial"} placement at ${company.companyName || "a company"} has been confirmed.`);
 
-    fetch(url, {
-      method: "POST", mode: "no-cors",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ _token: token || "", ...payload })
-    });
+    sendEmail(payload);
 
     // Background refresh — failure is OK; user already saw the ✓ success above
     loadTSReview().catch(() => {});
