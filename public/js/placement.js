@@ -515,7 +515,7 @@ async function doAccept(modal, placeholders, company) {
     }
 
     // Auto mode: send letter immediately and confirm
-    const res = await fetch(UPLOAD_WORKER_URL + "/send-email", {
+    const res = await fetch(UPLOAD_WORKER_URL + "/email", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...await authHeaders() },
       body: JSON.stringify(payload)

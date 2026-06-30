@@ -287,7 +287,7 @@ function showSystemVerify() {
       const codeHash  = await sha256Hex(code);
       const expiresAt = Date.now() + 10 * 60 * 1000;
       await setDoc(doc(db, "settings", "sysOtp"), { codeHash, uid: adminUser.uid, expiresAt });
-      const res = await fetch(UPLOAD_WORKER_URL + "/send-email", {
+      const res = await fetch(UPLOAD_WORKER_URL + "/email", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...await authHeaders() },
         body: JSON.stringify({
