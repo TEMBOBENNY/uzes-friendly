@@ -10,17 +10,26 @@ import { firebaseConfig, RECAPTCHA_SITE_KEY } from "./config.js";
 
 export const app = initializeApp(firebaseConfig);
 
-// App Check — only activates once a reCAPTCHA v3 site key is configured.
-// Until then the app runs normally (App Check simply not initialised).
+// ── App Check (reCAPTCHA v3) ─────────────────────────────────────────────────
+// If you see "App Check init failed" in console, check:
+// 1. RECAPTCHA_SITE_KEY in config.js matches Firebase Console → App Check
+// 2. Your domain is whitelisted in the reCAPTCHA console
+// 3. Firebase Console → App Check was registered with reCAPTCHA v3 (not Enterprise)
+// 4. If registered with Enterprise, swap ReCaptchaV3Provider → ReCaptchaEnterpriseProvider
 if (RECAPTCHA_SITE_KEY) {
   try {
-    initializeAppCheck(app, {
+    const appCheck = initializeAppCheck(app, {
       provider: new ReCaptchaV3Provider(RECAPTCHA_SITE_KEY),
-      isTokenAutoRefreshEnabled: true
+      isTokenAutoRefreshEnabled: true,
     });
+    console.log("[App Check] initialized successfully");
   } catch (e) {
-    console.error("App Check init failed:", e);
+    console.error("[App Check] init failed:", e.message);
+    console.warn("[App Check] Requests will be REJECTED if enforcement is ON.");
   }
+} else {
+  console.warn("[App Check] RECAPTCHA_SITE_KEY is empty — App Check disabled.");
+  console.warn("[App Check] Set it in config.js if you switch App Check to Enforcement.");
 }
 
 export const auth    = getAuth(app);

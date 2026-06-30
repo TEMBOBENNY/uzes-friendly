@@ -28,6 +28,11 @@ export const FCM_VAPID_KEY = "BOyshAeGwjo5A-c17HGScSABtecfg5BdsgnuQPm5wJo_au9RTD
 // Get it from: Firebase Console → App Check → Apps → register your web app
 // with reCAPTCHA v3. Paste the SITE key here. Leave "" to keep App Check off.
 export const RECAPTCHA_SITE_KEY = "6LejNzwtAAAAAGcxw8GBiKqdvPwoBrmOQxC_qO1E";
+// IMPORTANT: In the Google reCAPTCHA console, ensure these domains are whitelisted:
+//   localhost, uzes-friendly-web.web.app, uzes-friendly-web.firebaseapp.com
+// Also confirm Firebase Console → App Check → Apps → uzes-friendly (Web) 
+// was registered with reCAPTCHA v3 (not Enterprise) — otherwise change
+// ReCaptchaV3Provider → ReCaptchaEnterpriseProvider in firebase.js.
 
 // Organisation details printed on receipts / emails.
 export const ORG = {
