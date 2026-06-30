@@ -3,6 +3,8 @@ import { protect } from "./guard.js";
 import { sendPush } from "./fcm.js";
 import { initSubHero } from "./subhero.js?v=4";
 import { secretaryTabs } from "./nav.js";
+import { UPLOAD_WORKER_URL } from "./config.js";
+import { authHeaders } from "./upload.js";
 import {
   collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
   query, where, orderBy, serverTimestamp, writeBatch
@@ -95,15 +97,17 @@ async function getRelay() {
 }
 
 async function sendEmail(payload) {
-  const { url, token } = await getRelay();
-  if (!url) return;
   try {
-    await fetch(url, {
-      method: "POST", mode: "no-cors",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ _token: token || "", ...payload })
+    const res = await fetch(UPLOAD_WORKER_URL + "/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+      body: JSON.stringify(payload)
     });
-  } catch (_) {}
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Email failed");
+  } catch (err) {
+    console.error("Email send failed:", err.message);
+  }
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────

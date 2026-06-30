@@ -1,6 +1,6 @@
 import { db } from "./firebase.js";
 import {
-  collection, getDocs, query, orderBy
+  collection, getDocs, query, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ── Render the full reports tab ───────────────────────────────────────────────
@@ -11,9 +11,9 @@ export async function renderReports(containerId) {
   let payments = [], otherIncomes = [], allExpenses = [];
   try {
     const [paySnap, incSnap, expSnap] = await Promise.all([
-      getDocs(query(collection(db, "payments"),    orderBy("submittedAt",  "desc"))),
-      getDocs(query(collection(db, "otherIncome"), orderBy("addedAt",      "desc"))),
-      getDocs(query(collection(db, "expenses"),    orderBy("requestedAt",  "desc")))
+      getDocs(query(collection(db, "payments"),    orderBy("submittedAt",  "desc"), limit(100))),
+      getDocs(query(collection(db, "otherIncome"), orderBy("addedAt",      "desc"), limit(100))),
+      getDocs(query(collection(db, "expenses"),    orderBy("requestedAt",  "desc"), limit(100)))
     ]);
     payments     = paySnap.docs.map(d => ({ id: d.id, ...d.data() }));
     otherIncomes = incSnap.docs.map(d => ({ id: d.id, ...d.data() }));

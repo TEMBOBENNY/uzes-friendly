@@ -650,7 +650,7 @@ async function loadIncomes() {
   const el = document.getElementById("incomeList");
   el.innerHTML = "<p class='muted'>Loading…</p>";
   try {
-    const snap = await getDocs(query(collection(db, "otherIncome"), orderBy("addedAt", "desc")));
+    const snap = await getDocs(query(collection(db, "otherIncome"), orderBy("addedAt", "desc"), limit(100)));
     if (snap.empty) { el.innerHTML = "<p class='muted'>No other income recorded yet.</p>"; return; }
     el.innerHTML = snap.docs.map(d => {
       const r = { id: d.id, ...d.data() };
@@ -751,7 +751,7 @@ async function loadExpenses() {
   pendingEl.innerHTML = "<p class='muted'>Loading…</p>";
   allEl.innerHTML     = "<p class='muted'>Loading…</p>";
   try {
-    const snap = await getDocs(query(collection(db, "expenses"), orderBy("requestedAt", "desc")));
+    const snap = await getDocs(query(collection(db, "expenses"), orderBy("requestedAt", "desc"), limit(100)));
     const all  = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
     const myPending = all.filter(e =>
@@ -1722,7 +1722,7 @@ async function sgLoadVacancies() {
   if (!list) return;
   list.innerHTML = "<p class='muted small'>Loading…</p>";
   try {
-    const snap = await getDocs(query(collection(db, "vacancies"), orderBy("createdAt", "desc")));
+    const snap = await getDocs(query(collection(db, "vacancies"), orderBy("createdAt", "desc"), limit(50)));
     if (snap.empty) {
       list.innerHTML = "<p class='muted small'>No vacancies yet. Add one below.</p>"; return;
     }
@@ -1770,7 +1770,7 @@ window.sgAssignVacancy = async (vacancyId) => {
     const vacSnap = await getDoc(doc(db, "vacancies", vacancyId));
     if (!vacSnap.exists()) throw new Error("Vacancy not found.");
     const vacancy = vacSnap.data();
-    const paymentsSnap = await getDocs(collection(db, "payments"));
+    const paymentsSnap = await getDocs(query(collection(db, "payments"), where("status", "==", "confirmed")));
     const payments = paymentsSnap.docs.map(d => d.data());
     const { runMatchingAlgorithm, commitMatches } = await import("./placement-utils.js");
     const matches = await runMatchingAlgorithm(vacancyId, vacancy, payments);

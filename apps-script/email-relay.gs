@@ -19,6 +19,13 @@ var MAX_EMAILS_PER_HOUR = 60;
 
 function doPost(e) {
   try {
+    if (e.postData.length > 5 * 1024 * 1024) {
+      return jsonResponse({ ok: false, error: "Payload too large" });
+    }
+    var contentType = e.postData.type || "";
+    if (contentType && contentType !== "application/json") {
+      return jsonResponse({ ok: false, error: "Invalid content type" });
+    }
     var data = JSON.parse(e.postData.contents);
 
     // 1. Token validation

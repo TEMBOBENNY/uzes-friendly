@@ -1053,9 +1053,9 @@ async function runYearReset() {
   try {
     statusEl.textContent = "Loading financial records…";
     const [paySnap, incSnap, expSnap] = await Promise.all([
-      getDocs(collection(db, "payments")),
-      getDocs(collection(db, "otherIncome")),
-      getDocs(collection(db, "expenses")),
+      getDocs(query(collection(db, "payments"), limit(100))),
+      getDocs(query(collection(db, "otherIncome"), limit(100))),
+      getDocs(query(collection(db, "expenses"), limit(100))),
     ]);
     const payments = paySnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const incomes  = incSnap.docs.map(d => ({ id: d.id, ...d.data() }));
