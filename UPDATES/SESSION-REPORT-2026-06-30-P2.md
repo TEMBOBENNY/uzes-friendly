@@ -347,6 +347,23 @@ If "Unauthorized" appears: open Apps Script editor → Project Settings (gear ic
 | `68cd9fc` | Worker: propagate Apps Script error body to client |
 | `ba6f68d` | Fix critical Worker bug: env var name mismatch broke ALL emails |
 
+### Round 3 — User Confirms Receipts + Letters Working; Admin OTP Still Broken
+
+User confirmed receipt emails and attachment-letter emails now work. New report: **Admin → System tab OTP** fails with "Failed to fetch" when clicking "Send code to my email."
+
+"Failed to fetch" (not a 4xx/5xx JSON error) signals the request never completed at the network level — consistent with hitting a route that doesn't exist on the Worker (browser reports the failed fetch before any response body is available in some 404/CORS edge cases) — same family of bug as Round 1.
+
+**Found:** Round 1's `/send-email` → `/email` sweep only touched `executive.js` and `industrial-secretary.js`. Two more call sites had the identical typo and were missed:
+- `public/js/admin.js:290` — `showSystemVerify().sendCode()` — the admin OTP email
+- `public/js/placement.js:518` — auto-mode placement letter send (student-facing accept flow)
+
+**Fix:** Both changed from `UPLOAD_WORKER_URL + "/send-email"` → `UPLOAD_WORKER_URL + "/email"`. Verified zero remaining `/send-email` references anywhere in `public/` with a repo-wide grep.
+
+**Commit:** `840cdb8` — "Fix remaining /send-email endpoint typos in admin OTP and placement letter flows"
+**Deployed:** Firebase Hosting
+
+This closes out every known `/send-email` vs `/email` mismatch in the codebase — Rounds 1 and 3 together covered all five call sites (`executive.js` ×3, `admin.js` ×1, `placement.js` ×1).
+
 ---
 
 *End of session report — 2026-06-30 Part 2 (continued)*
