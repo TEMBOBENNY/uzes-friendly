@@ -740,7 +740,10 @@ async function handleEmail(request, env, origin) {
       body: JSON.stringify({ _token: env.RELAY_TOKEN, ...payload })
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return json({ error: data.error || "Email relay failed" }, 500, origin);
+    // Apps Script always returns HTTP 200 — must also check the ok field in the body
+    if (!res.ok || data.ok === false) {
+      return json({ error: data.error || "Email relay failed" }, 500, origin);
+    }
     return json({ ok: true }, 200, origin);
   } catch (err) {
     return json({ error: "Email failed: " + err.message }, 500, origin);
