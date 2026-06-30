@@ -257,4 +257,96 @@ Firebase App Check uses the **secret key** server-side to verify reCAPTCHA token
 
 ---
 
-*End of session report — 2026-06-30 Part 2*
+## Continuation — App Check Enforcement Fallout & Full Email Audit
+
+After App Check enforcement was switched on (web: Firestore + Authentication), the user reported two regressions and asked for them to be fixed in a follow-up working block. This section documents that work, picking up from the "Pending Actions" table above.
+
+### Round 1 — Three Bugs Found by Reading the Code
+
+**Bug A — Public pages 403 ("Missing or insufficient permissions")**
+`public/js/firebase-public.js` (used by `about.js`, `activities.js`, `contact.js`, `faq.js`, `support.js`) initialized Firestore but never called `initializeAppCheck()`. Under Firestore enforcement, every read from these five pages had no App Check token attached and was rejected.
+**Fix:** Added the same `initializeAppCheck(app, { provider: new ReCaptchaV3Provider(RECAPTCHA_SITE_KEY) })` block used in `firebase.js`.
+
+**Bug B — Receipt, rejection, and placement-letter emails (executive role)**
+`public/js/executive.js` called `UPLOAD_WORKER_URL + "/send-email"` in three places (`confirmPayment`, `confirmReject`, `sgApprovePlacement`). The Worker's actual route is `/email` — there is no `/send-email` route, so every call 404'd silently (wrapped in `try {} catch(_) {}` with no UI feedback).
+**Fix:** Changed all three to `/email`.
+
+**Bug C — Placement-letter emails (Industrial Training Secretary role)**
+`industrial-secretary.js → approvePlacement` still used the pre-Worker architecture: read `settings/emailRelay` from Firestore for a `url`/`token` pair, then `fetch(url, { mode: "no-cors", ... })` directly to Apps Script. That Firestore document no longer has a `url` field (only `isTrial`), so this threw "Email relay not configured." before even attempting to send.
+**Fix:** Removed the Firestore relay read; replaced the direct fetch with the existing `sendEmail()` helper (same Worker `/email` path every other function uses).
+
+**Commit:** `6acd8c3` — "Fix emails broken after App Check enforcement + fix public page 403"
+**Deployed:** Firebase Hosting (`firebase deploy --only hosting`)
+
+### Round 1 Worker Hardening
+
+While reviewing the Worker's `handleEmail()`, noticed it only checked `!res.ok` (HTTP status) when forwarding to Apps Script — but Apps Script's `doPost` always returns HTTP 200, using a body field `{ ok: false, error: "..." }` to signal failure. This meant any Apps Script-side error (bad token, rate limit, thrown exception) was reported back to the client as success.
+**Fix:** Added `data.ok === false` to the failure check.
+**Commit:** `68cd9fc` — "Worker: propagate Apps Script error body to client"
+**Deployed:** Cloudflare Worker (version `0d16600a`)
+
+### Round 2 — User Reports Emails STILL Dead. Full Audit Requested.
+
+User reported after Round 1: emails were still not sending, despite Apps Script's own `testEmail()` function (run directly in the Apps Script editor) successfully delivering a receipt. This meant Apps Script itself — quota, PDF generation, `MailApp.sendEmail` — was fine. The break had to be somewhere in the Worker → Apps Script call path. User asked for a full audit instead of guessing further, and to reconfigure Cloudflare/embedded keys if needed.
+
+**Investigation method:** Listed the actual secret names configured on the Cloudflare Worker:
+```
+npx wrangler secret list
+→ ADMIN_DELETE_SECRET, ADMIN_RESET_SECRET, EMAIL_RELAY_TOKEN, EMAIL_RELAY_URL, GEMINI_API_KEY, TOTP_ENCRYPTION_KEY
+```
+
+**Root cause found:** The Worker code in `handleEmail()` referenced `env.RELAY_TOKEN` (three places: header comment + two code lines), but the actual secret configured on Cloudflare is named **`EMAIL_RELAY_TOKEN`**. `env.RELAY_TOKEN` was therefore always `undefined`, which tripped this guard at the very top of `handleEmail()`:
+```js
+if (!env.EMAIL_RELAY_URL || !env.RELAY_TOKEN) {
+  return json({ error: "Email relay not configured on Worker" }, 500, origin);
+}
+```
+Every single email request — receipts, rejections, attachment letters, placement letters — returned this 500 error **before the Worker ever attempted to contact Apps Script.** Because `sendEmail()` on the client (`industrial-secretary.js`) and the inline fetch calls in `executive.js` only `console.error()` on failure with no UI surface, this was completely invisible to the user — explaining why Apps Script's direct `testEmail()` worked (it bypasses the Worker entirely) while every real in-app email silently died.
+
+This also explains why the Round 1 Worker hardening (`data.ok === false` check) had no visible effect — the code path that check lives in was never reached; the function returned at the config-guard before ever calling `fetch(env.EMAIL_RELAY_URL, ...)`.
+
+**Fix:** Renamed all three references from `env.RELAY_TOKEN` → `env.EMAIL_RELAY_TOKEN`, matching the real secret name.
+
+**Verification performed:**
+```
+curl -X POST https://uzes-upload.uzesofficial.workers.dev/email -d '{"to":"test@example.com","type":"reject"}'
+→ HTTP 401 {"error":"Unauthorized — missing Authorization token"}
+```
+This confirms the deploy is live and `requireUser()` (Firebase ID-token check) still runs first, as expected — full validation requires a real signed-in session, which only the live app can provide.
+
+**Commit:** `ba6f68d` — "Fix critical Worker bug: env var name mismatch broke ALL emails"
+**Deployed:** Cloudflare Worker (version `e63c9026`)
+
+### What To Test Next (User)
+
+Log into the live app and trigger any of: confirm a payment (receipt email), reject a payment, approve/reject an attachment letter request, or approve a placement. Two outcomes are now possible where before there was total silence:
+
+| Console shows | Meaning |
+|---|---|
+| No error, email arrives | Fixed — fully working |
+| `Email send failed: Unauthorized` | The **value** of `EMAIL_RELAY_TOKEN` (Cloudflare) does not match the **value** of `RELAY_TOKEN` (Apps Script → Project Settings → Script Properties). Re-paste matching values on both sides. |
+| `Email send failed: Email relay not configured on Worker` | `EMAIL_RELAY_URL` secret is empty/unset on Cloudflare — re-paste the Apps Script Web App deployment URL. |
+| Any other Apps Script error message | Will now surface verbatim (Round 1 hardening) — read it directly, e.g. rate limit, invalid recipient, etc. |
+
+If "Unauthorized" appears: open Apps Script editor → Project Settings (gear icon) → Script Properties → confirm `RELAY_TOKEN` value, then Cloudflare Dashboard → Workers → uzes-upload → Settings → Variables and Secrets → `EMAIL_RELAY_TOKEN` → re-enter the same value → Deploy.
+
+### Files Changed This Round
+
+| File | Change |
+|------|--------|
+| `public/js/firebase-public.js` | Added App Check init |
+| `public/js/executive.js` | `/send-email` → `/email` (3 call sites) |
+| `public/js/industrial-secretary.js` | `approvePlacement` — removed Firestore relay read, now uses `sendEmail()` |
+| `workers/upload-worker/index.js` | `data.ok === false` check added; `env.RELAY_TOKEN` → `env.EMAIL_RELAY_TOKEN` (3 references) |
+
+### Commits This Round
+
+| Commit | Description |
+|--------|-------------|
+| `6acd8c3` | Fix emails broken after App Check enforcement + fix public page 403 |
+| `68cd9fc` | Worker: propagate Apps Script error body to client |
+| `ba6f68d` | Fix critical Worker bug: env var name mismatch broke ALL emails |
+
+---
+
+*End of session report — 2026-06-30 Part 2 (continued)*
