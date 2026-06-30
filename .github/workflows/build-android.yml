@@ -31,13 +31,28 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Decode keystore
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/keystore.jks
-
       - name: Grant execute permission for Gradle
         run: chmod +x android/gradlew
 
+      # ── Detect whether Play Store secrets are configured ──────────────────────
+      - name: Check for signing secrets
+        id: secrets
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "available=true" >> $GITHUB_OUTPUT
+          else
+            echo "available=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          KEY: ${{ secrets.KEYSTORE_BASE64 }}
+
+      # ── PATH A: Signed release build (runs when secrets are set) ─────────────
+      - name: Decode keystore
+        if: steps.secrets.outputs.available == 'true'
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/keystore.jks
+
       - name: Build signed release AAB
+        if: steps.secrets.outputs.available == 'true'
         env:
           VERSION_CODE: ${{ github.run_number }}
           VERSION_NAME: "1.${{ github.run_number }}"
@@ -50,6 +65,7 @@ jobs:
             -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
 
       - name: Upload to Play Store (internal track)
+        if: steps.secrets.outputs.available == 'true'
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT_JSON }}
@@ -58,8 +74,23 @@ jobs:
           track: internal
           status: completed
 
-      - name: Save AAB as artifact (for manual sideloading)
+      - name: Save release AAB as artifact
+        if: steps.secrets.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: aab-release-${{ github.run_number }}
           path: android/app/build/outputs/bundle/release/*.aab
+
+      # ── PATH B: Debug build (runs when secrets are NOT yet set) ──────────────
+      - name: Build debug APK
+        if: steps.secrets.outputs.available == 'false'
+        run: |
+          cd android
+          ./gradlew assembleDebug
+
+      - name: Save debug APK as artifact
+        if: steps.secrets.outputs.available == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-debug-${{ github.run_number }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
