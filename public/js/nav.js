@@ -56,6 +56,16 @@ export function adminTabs() {
   ];
 }
 
+export function ecTabs() {
+  return [
+    { id: "tab-dash",     label: "Dashboard",    icon: "dash"  },
+    { id: "tab-nom",      label: "Nominations",  icon: "inbox" },
+    { id: "tab-overview", label: "Overview",     icon: "users" },
+    { id: "tab-results",  label: "Results",      icon: "chart" },
+    { id: "tab-profile",  label: "My Profile",   icon: "acc"   },
+  ];
+}
+
 export function secretaryTabs() {
   return [
     { id: "tab-dash",         label: "Dashboard",            icon: "dash"   },

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Electoral Commission — UZES</title>
+  <link rel="stylesheet" href="css/styles.css?v=7">
+  <style>
+    .tabs { display: flex; gap: 6px; margin: 16px 0 0; border-bottom: 2px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      padding: 9px 18px; border: none; background: none; cursor: pointer;
+      font-size: 14px; font-weight: 600; color: var(--muted);
+      border-bottom: 3px solid transparent; margin-bottom: -2px; white-space: nowrap; flex-shrink: 0;
+    }
+    .tab-btn.active { color: var(--green); border-bottom-color: var(--green); }
+    .tab-panel.hidden { display: none; }
+    .section-head { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+    .section-sub { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+
+    /* Request cards (Nominations tab — approve/reject/add-contestant) */
+    .req-card {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow);
+    }
+    .req-card-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .req-name  { font-weight: 700; font-size: 15px; }
+    .req-meta  { font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+    .req-fields { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; margin-bottom: 12px; }
+    .req-field  { display: flex; gap: 5px; }
+    .req-field-lbl { font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+    .req-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; padding-top: 12px; border-top: 1px solid var(--line); }
+    .btn-approve { background: var(--ok); color: #fff; border: none; padding: 8px 18px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 13px; }
+    .btn-approve:hover { background: #16703e; }
+    .btn-approve:disabled { opacity: .6; cursor: default; }
+    .btn-reject-sm { background: #fdf4f4; color: var(--danger); border: 1px solid #f1c0bb; padding: 8px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 13px; }
+    .btn-reject-sm:hover { background: #fae8e8; }
+    .reject-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; width: 100%; margin-top: 8px; }
+    .reject-input { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid var(--danger); border-radius: 8px; font-size: 13px; }
+    .btn-reject-confirm { background: var(--danger); color: #fff; border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 13px; }
+    .status-pill { color: #fff; font-size: 10px; font-weight: 800; padding: 3px 9px; border-radius: 20px; letter-spacing: .5px; }
+
+    /* Election Control card (Dashboard — phase pipeline) */
+    .ec-phase-pipeline { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+    .ec-phase-step {
+      flex: 1; min-width: 110px; text-align: center; padding: 10px 8px; border-radius: 8px;
+      border: 1px solid var(--line); font-size: 12.5px; font-weight: 700; color: var(--muted);
+      background: var(--bg);
+    }
+    .ec-phase-step.active { color: var(--green); border-color: var(--green); background: rgba(30,140,80,.08); }
+    .ec-phase-step.done { color: var(--ok); }
+    .ec-warn-banner {
+      background: #fff8e6; border: 1px solid #f0d68a; color: #7a5c00; border-radius: 8px;
+      padding: 10px 14px; font-size: 13px; margin-top: 10px;
+    }
+    [data-theme="dark"] .ec-warn-banner { background: #2d2610; border-color: #6e5c1a; color: #e0c675; }
+    .ec-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; margin-top: 16px; }
+    .ec-kpi-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+    .ec-kpi-num { font-size: 22px; font-weight: 800; }
+    .ec-kpi-lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* CSS-only bar chart (Results tab — no chart library, Flag 16) */
+    .ec-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .ec-bar-name { width: 140px; font-size: 13px; flex-shrink: 0; }
+    .ec-bar-track { flex: 1; background: var(--bg); border-radius: 6px; height: 20px; overflow: hidden; }
+    .ec-bar-fill { background: var(--green); height: 100%; border-radius: 6px; }
+    .ec-bar-count { width: 70px; text-align: right; font-size: 12.5px; font-weight: 700; flex-shrink: 0; }
+
+    /* Overview toggle (Allow all students to vote) */
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--line); }
+    .toggle-label { font-weight: 600; font-size: 14px; }
+    .toggle-sub   { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .toggle-switch { position: relative; width: 48px; height: 26px; cursor: pointer; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-track { position: absolute; inset: 0; background: var(--line); border-radius: 26px; transition: background .2s; }
+    .toggle-thumb { position: absolute; width: 20px; height: 20px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: transform .2s; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+    .toggle-switch input:checked + .toggle-track { background: var(--ok); }
+    .toggle-switch input:checked ~ .toggle-thumb { transform: translateX(22px); }
+    .ok-msg { color: var(--ok); font-size: 13px; font-weight: 600; }
+
+    .btn-danger-sm {
+      background: var(--danger); color: #fff; border: none;
+      padding: 8px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 13px;
+    }
+    .btn-danger-sm:hover { background: #a93226; }
+    .action-err { font-size: 12px; color: var(--danger); margin-top: 4px; }
+
+    [data-theme="dark"] .btn-reject-sm { background: #2d1a1a; border-color: #6e2525; }
+    [data-theme="dark"] .btn-reject-sm:hover { background: #3a2020; }
+  </style>
+</head>
+<body>
+  <!-- Sub-hero (new header with logo + tabs + user + sign out) injected by subhero.js -->
+
+  <main class="page">
+
+    <!-- ── Dashboard ─────────────────────────────────────────────── -->
+    <div id="tab-dash" class="tab-panel" style="margin-top:16px">
+      <div id="dashContent">
+        <div class="sk sk-card" style="height:80px;margin-bottom:12px"></div>
+        <div class="sk sk-card" style="height:160px"></div>
+      </div>
+    </div>
+
+    <!-- ── Nominations ───────────────────────────────────────────── -->
+    <div id="tab-nom" class="tab-panel hidden" style="margin-top:16px">
+      <div class="card" style="margin-bottom:16px">
+        <p class="section-head">EC Payment Approvals</p>
+        <p class="section-sub">Approve a nomination fee, then add the student as a contestant. There is no way to add a contestant without an approved payment.</p>
+      </div>
+      <div id="ecPaymentsList">
+        <div class="sk sk-card" style="height:140px;margin-bottom:12px"></div>
+        <div class="sk sk-card" style="height:140px"></div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <p class="section-head">Contestant Roster</p>
+        <p class="section-sub">All approved contestants for the current cycle, grouped by position.</p>
+        <div id="contestantRoster">
+          <p class="muted small">Loading…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Overview ──────────────────────────────────────────────── -->
+    <div id="tab-overview" class="tab-panel hidden" style="margin-top:16px">
+      <div class="card" style="max-width:700px">
+        <p class="section-head">Student Overview</p>
+        <div id="ecOverviewStats">
+          <p class="muted small">Loading…</p>
+        </div>
+      </div>
+
+      <div class="card" style="max-width:700px;margin-top:16px">
+        <div class="toggle-row" style="border-bottom:none">
+          <div>
+            <div class="toggle-label">Allow all students to vote</div>
+            <div class="toggle-sub" id="allowAllStatusText">Currently: OFF (only paid-up members can vote)</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="allowAllToggle">
+            <div class="toggle-track"></div>
+            <div class="toggle-thumb"></div>
+          </label>
+        </div>
+        <p class="muted small" style="margin-top:8px">Turning this ON requires an OTP sent to the UZES Chairperson (or Admin, if no Chairperson is on file).</p>
+        <p id="allowAllMsg" class="ok-msg" style="margin-top:6px;min-height:16px"></p>
+      </div>
+    </div>
+
+    <!-- ── Results ───────────────────────────────────────────────── -->
+    <div id="tab-results" class="tab-panel hidden" style="margin-top:16px">
+      <div id="ecResultsContent">
+        <div class="sk sk-card" style="height:200px;margin-bottom:12px"></div>
+        <div class="sk sk-card" style="height:200px"></div>
+      </div>
+    </div>
+
+    <!-- ── My Profile ────────────────────────────────────────────── -->
+    <div id="tab-profile" class="tab-panel hidden" style="margin-top:16px">
+      <div id="accPwBox"></div>
+      <div id="acc2faBox" style="margin-top:14px"></div>
+    </div>
+  </main>
+
+  <footer class="pub-footer">
+    <div class="footer-inner">
+      <p class="footer-tagline">The University of Zambia Engineering Society · School of Engineering</p>
+      <p class="footer-copy">&copy; <span id="footerYear"></span> UZES · <a href="mailto:uzesofficial@gmail.com">uzesofficial@gmail.com</a></p>
+    </div>
+  </footer>
+  <script src="js/init.js"></script>
+
+  <script type="module" src="js/ec-chair.js?v=1"></script>
+  <script src="js/chrome.js"></script>
+</body>
+</html>

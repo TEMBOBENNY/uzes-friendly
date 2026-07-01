@@ -93,7 +93,7 @@ async function deleteFirebaseAuthUser(uid) {
 export const POSITIONS = [
   "Chairperson", "Vice Chairperson", "Secretary General", "Vice Secretary General",
   "Treasurer", "Information and Publicity Secretary",
-  "Social and Cultural Secretary", "Committee Member"
+  "Social and Cultural Secretary", "Committee Member", "EC Chairperson"
 ];
 
 export const DEPARTMENTS = [
@@ -933,6 +933,7 @@ async function initSettings() {
   document.getElementById("resetYearBtn").addEventListener("click", runYearReset);
   document.getElementById("seedLibraryBtn").addEventListener("click", seedLibraryCourses);
   initSecretaryCard();
+  initElectionCard();
 
   // Admin API secrets are session-only — typed into the inputs each visit, never
   // persisted. Just wire up the "Test secret" button against the Worker.
@@ -1279,6 +1280,115 @@ function renderSecretaryCreate(statusEl) {
       btn.disabled = false; btn.textContent = "Create secretary account";
     }
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ELECTORAL COMMISSION — election cycle create / archive (Admin only)
+//  Full logic (phase advance, results, contestants) lives in ec-chair.js —
+//  Admin's role here is just to open and close a cycle.
+// ═══════════════════════════════════════════════════════════════════════════════
+async function initElectionCard() {
+  const statusEl = document.getElementById("electionMgmtStatus");
+
+  let active = null;
+  try {
+    const snap = await getDocs(query(
+      collection(db, "electionCycles"),
+      where("status", "==", "active")
+    ));
+    if (!snap.empty) active = { id: snap.docs[0].id, ...snap.docs[0].data() };
+  } catch (err) {
+    statusEl.innerHTML = `<p class="error">Failed to load: ${err.message}</p>`;
+    return;
+  }
+
+  if (active) {
+    renderElectionActive(active, statusEl);
+  } else {
+    renderElectionCreate(statusEl);
+  }
+}
+
+function renderElectionCreate(statusEl) {
+  statusEl.innerHTML = `
+    <p class="muted small" style="margin-bottom:12px">No active election cycle. Create one to begin.</p>
+    <form id="electionCreateForm" style="max-width:400px" autocomplete="off">
+      <label for="electionCName">Election name</label>
+      <input id="electionCName" required placeholder="e.g. 2025/2026 Executive Elections" style="margin-bottom:10px">
+      <p id="electionCreateErr" class="error" style="margin-bottom:6px"></p>
+      <button type="submit" id="electionCreateBtn" class="btn-primary" style="width:auto;padding:10px 22px;margin-top:0">
+        Create election cycle
+      </button>
+    </form>`;
+
+  document.getElementById("electionCreateForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const errEl = document.getElementById("electionCreateErr");
+    const btn   = document.getElementById("electionCreateBtn");
+    errEl.textContent = ""; btn.disabled = true; btn.textContent = "Creating…";
+    const name = document.getElementById("electionCName").value.trim();
+    try {
+      const ref = doc(collection(db, "electionCycles"));
+      await setDoc(ref, {
+        name,
+        phase: "nominations",
+        status: "active",
+        allowAllStudents: false,
+        revote: null,
+        publishedAt: null,
+        archivedAt: null,
+        createdAt: serverTimestamp(),
+        createdBy: adminUser.uid
+      });
+      await initElectionCard();
+    } catch (err) {
+      errEl.textContent = err.message;
+      btn.disabled = false; btn.textContent = "Create election cycle";
+    }
+  });
+}
+
+function renderElectionActive(cycle, statusEl) {
+  const phaseLabels = {
+    nominations: "Nominations", campaigning: "Campaigning", voting: "Voting",
+    counting: "Counting", published: "Published"
+  };
+  const canArchive = cycle.phase === "published";
+
+  statusEl.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;margin-bottom:14px">
+      <div><span class="muted small" style="text-transform:uppercase;letter-spacing:.4px;font-weight:700">Cycle</span><br>${esc(cycle.name || "—")}</div>
+      <div><span class="muted small" style="text-transform:uppercase;letter-spacing:.4px;font-weight:700">Phase</span><br>${esc(phaseLabels[cycle.phase] || cycle.phase)}</div>
+    </div>
+    <button id="archiveElectionBtn" class="btn-danger-sm" ${canArchive ? "" : "disabled"}>
+      Archive election
+    </button>
+    ${!canArchive ? `<p class="muted small" style="margin-top:8px">Available once the EC Chairperson has published results.</p>` : ""}
+    <p id="archiveElectionMsg" style="font-size:12px;margin-top:8px;min-height:14px"></p>`;
+
+  const archiveBtn = document.getElementById("archiveElectionBtn");
+  if (canArchive) {
+    archiveBtn.addEventListener("click", async () => {
+      if (!confirm(`Archive "${cycle.name}"? This closes the cycle so a new one can be created. This cannot be undone.`)) return;
+      const msg = document.getElementById("archiveElectionMsg");
+      archiveBtn.disabled = true;
+      msg.style.color = "var(--muted)"; msg.textContent = "Archiving…";
+      try {
+        // Soft archive only — flips status and stamps the time. The full
+        // electionArchives snapshot + Excel export is built in a later slice
+        // (Workflow §5, Slice 4 / P7); original data stays in place either way.
+        await updateDoc(doc(db, "electionCycles", cycle.id), {
+          status: "archived",
+          archivedAt: serverTimestamp()
+        });
+        msg.style.color = "var(--ok)"; msg.textContent = "Archived.";
+        setTimeout(() => initElectionCard(), 1200);
+      } catch (err) {
+        msg.style.color = "var(--danger)"; msg.textContent = err.message;
+        archiveBtn.disabled = false;
+      }
+    });
+  }
 }
 
 function esc(s) { return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }

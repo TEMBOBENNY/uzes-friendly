@@ -79,6 +79,10 @@ protect(["executive", "admin"], (user, profile) => {
   if (profile.role === "executive" && profile.position === "Industrial Training Secretary") {
     location.replace("industrial-secretary.html"); return;
   }
+  // Redirect EC Chairperson to their own page
+  if (profile.role === "executive" && profile.position === "EC Chairperson") {
+    location.replace("ec-chair.html"); return;
+  }
   isT  = profile.position === "Treasurer" || profile.role === "admin";
   isCA = ["Chairperson", "Vice Chairperson"].includes(profile.position) || profile.role === "admin";
 

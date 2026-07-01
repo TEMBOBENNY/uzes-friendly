@@ -494,5 +494,101 @@ service cloud.firestore {
       allow read:  if signedIn() && myActive();
       allow write: if isAdmin();
     }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    //  ELECTORAL COMMISSION
+    // ════════════════════════════════════════════════════════════════════════════
+
+    // EC Chairperson = the one executive account that runs the election.
+    function isECChair() {
+      return isExec() && 'position' in myProfile()
+             && myProfile().position == 'EC Chairperson';
+    }
+
+    // EC nomination fee submissions — isolated from /payments. Only the EC Chair
+    // and Admin may read these; other executives (Treasurer included) must not
+    // see nomination fees (Flag 18).
+    match /ecPayments/{id} {
+      allow read:  if isECChair() || isAdmin();
+      allow create: if signedIn() && myActive()
+                    && myRole() == 'student'
+                    && request.resource.data.studentUid == myUid()
+                    && request.resource.data.status     == 'pending'
+                    && request.resource.data.amount      is number
+                    && request.resource.data.amount      >  0
+                    && request.resource.data.proofUrl    is string
+                    && request.resource.data.proofUrl.size() > 0
+                    && request.resource.data.method      is string
+                    && request.resource.data.method.size() > 0;
+      allow update: if isECChair() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Election cycle controller — Admin creates/archives; EC Chair advances phases.
+    // Signed-in users read for the student Elections tab to gate on phase. Public
+    // (unauthenticated) read is allowed once published, so election-results.html
+    // works without login (Flag 20) — only the published field set is exposed either way.
+    match /electionCycles/{id} {
+      allow read:   if (signedIn() && myActive()) || resource.data.phase == 'published';
+      allow create: if isAdmin();
+      allow update: if isECChair() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Approved contestants. No manual bypass — the UI only ever creates these from
+    // an approved ecPayment, but the rule itself can't verify that provenance, so
+    // creation is restricted to EC Chair/Admin and the app enforces the pipeline.
+    // Public read is allowed once the parent cycle's phase is "published" (Flag 20)
+    // so election-results.html works without authentication. The contestant doc
+    // itself has no "published" flag (see plan §3.3) — visibility is derived from
+    // the cycle it belongs to.
+    match /contestants/{id} {
+      allow read:   if (signedIn() && myActive()) || isAdmin() ||
+                    get(/databases/$(database)/documents/electionCycles/$(resource.data.cycleId)).data.phase == 'published';
+      allow create: if isECChair() || isAdmin();
+      allow update: if isECChair() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Anonymous ballots — students may only ever CREATE, never read/list, so no one
+    // (including the voter) can query the collection to see how anyone voted (Flag 19).
+    match /votes/{id} {
+      allow read:   if isECChair() || isAdmin();
+      allow create: if signedIn() && myActive() && myRole() == 'student'
+                    && request.resource.data.cycleId       is string
+                    && request.resource.data.position      is string
+                    && request.resource.data.contestantId  is string
+                    && request.resource.data.round in ['main','revote'];
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // Double-vote prevention + audit trail. Self-read only (plus EC Chair/Admin) —
+    // this shows WHICH positions a student voted on, never WHO they picked (that's
+    // only derivable by cross-referencing anonymous votes, which nobody can read).
+    match /voterTurnout/{uid} {
+      allow read:   if isECChair() || isAdmin() || myUid() == uid;
+      allow create: if signedIn() && myActive() && myUid() == uid && myRole() == 'student';
+      allow update: if signedIn() && myActive() && myUid() == uid && myRole() == 'student';
+      allow delete: if isAdmin();
+    }
+
+    // Campaigning-phase pre-selections — self-only, deleted by the student's own
+    // client on successful vote submit.
+    match /draftSelections/{uid} {
+      allow read, write: if signedIn() && myActive() && myUid() == uid;
+    }
+
+    // Live vote aggregates — single doc per cycle, EC Chair/Admin only.
+    match /electionStats/{id} {
+      allow read:  if isECChair() || isAdmin();
+      allow write: if isECChair() || isAdmin();
+    }
+
+    // Soft archive snapshot created when Admin archives a cycle — Admin only.
+    match /electionArchives/{id} {
+      allow read:  if isAdmin();
+      allow write: if isAdmin();
+    }
   }
 }
