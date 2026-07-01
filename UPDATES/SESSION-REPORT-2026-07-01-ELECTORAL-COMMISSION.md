@@ -406,3 +406,52 @@ All of Slice 4's planned items are now built:
 **What remains untested end-to-end across the whole build:** the full authenticated flow (student votes, EC Chair approves/adds contestants/advances phases/calls revotes/publishes, admin creates/archives cycles) has never been exercised live in this tool session beyond the Slice 1/2 confirmations the user already ran locally. The App Check throttle (Chapter 13/14) blocked further live testing from this side for most of Slices 3–4. **Recommended next step:** a full live walkthrough of one complete election cycle, ideally once the App Check throttle clears or its underlying issue is fixed (see `APPCHECK-RECOVERY-GUIDE.md`).
 
 **Next:** Await user decision — live-test the full build, or commit/push/deploy first and test against production.
+
+---
+
+## Chapter 20 — Commit, push, and deploy (Slices 2–4)
+
+User confirmed the rules gap (Chapter 14's `electionStats` fix and Chapter 15's `settings/ecOtp` fix, both written after the Chapter 10 deploy, never made it to the live Firestore) needed fixing before local testing of the Allow-All OTP toggle and Results/public-page reads would work — since local dev still points at the real cloud project.
+
+**Actions:**
+1. Committed all of Slices 2–4 (`546a921`) — student ballot, EC Chair Nominations/Results/Overview tabs, public results page, Excel archive export, FCM push, email receipt, plus this session report.
+2. Pushed to `origin/main` (`16bb8f3..546a921`).
+3. Ran `npx firebase deploy --only hosting,firestore:rules` — rules compiled and released, hosting uploaded (57 files) and released. Live at https://uzes-friendly-web.web.app.
+
+**Current state:** All rules changes from this entire session (Chapters 8, 14, 15) are now live. The user can test the full build — nomination pipeline (already confirmed working earlier), student ballot, phase transitions, revote, publish, public results page, Overview stats + Allow-All OTP toggle, contestant edit, Excel export — against localhost, which reads/writes the same now-updated cloud Firestore.
+
+**Known remaining gaps (not fixable from this repo / deliberately descoped, not bugs):**
+- Email vote receipt won't actually send until the external Cloudflare Worker adds a `vote_receipt` handler (Flag 24).
+- "Withdraw" contestant status (votes still count) was never built — only "Disqualify" (votes excluded) exists.
+- Mass FCM push to all students on phase change was deliberately descoped to v2; only executives get notified in v1.
+- App Check throttle (Chapters 13–14) prevented this session from live-verifying the authenticated flows itself — the user's own local testing is the first real end-to-end validation of Slices 3–4.
+
+**Next:** User to run a full live test locally now that rules are deployed. Report back any issues for fixes.
+
+---
+
+## Chapter 21 — Bug found & fixed: "blank receipt" on the Allow-All OTP email
+
+**User report:** Testing the "Allow all students to vote" OTP toggle, the email that arrived was a blank receipt instead of a one-time code.
+
+**Root cause (confirmed by reading the actual email pipeline):** Earlier session chapters (13, 19) assumed the Cloudflare Worker's email-sending logic lived entirely outside this repo and was untouchable — **that assumption was wrong.** The repo actually contains **both** pieces:
+- `workers/upload-worker/index.js` — the Worker's `/email` endpoint just forwards the payload verbatim to a Google Apps Script Web App (`env.EMAIL_RELAY_URL`), adding the shared secret. It does no template logic itself.
+- `apps-script/email-relay.gs` — **this** is where email content is actually built, dispatched by `data.type` in `doPost()`. It only had cases for `attachment_letter`, `attachment_rejection`, `placement_letter`, `admin_otp`, and `reject` — everything else fell into a final, unconditional `else` branch that calls `buildReceiptPdf(data)` + `sendReceiptEmail(data, pdf)`, the **payment-receipt** template. My two new types from this session, `ec_allow_all_otp` (Chapter 15) and `vote_receipt` (Chapter 19), were never added as explicit cases — so both were silently misrouted into the payment-receipt builder, which expects fields like `receiptNo`/`category`/`amount` that don't exist in an OTP or vote-receipt payload. That's exactly the "blank receipt" — the payment PDF template rendering with none of its expected data.
+
+**Fix — `apps-script/email-relay.gs`:**
+- Added two explicit `doPost()` routing cases: `ec_allow_all_otp` → `sendEcAllowAllOtpEmail(data)`, `vote_receipt` → `sendVoteReceiptEmail(data)`.
+- `sendEcAllowAllOtpEmail(d)` — new function, mirrors the existing `sendAdminOtpEmail(d)` pattern exactly (same 10-minute-expiry code display), but explains what's being confirmed and includes the cycle name if provided.
+- `sendVoteReceiptEmail(d)` — new function, sends the receipt token + list of positions voted (never the chosen candidates), matching the plan's Q4 anonymity requirement.
+
+**Fix — `public/js/ec-chair.js`:** added `cycleName: _cycle?.name || ""` to the OTP request payload so the new email template has something to reference (was missing before, would have rendered as a blank string but not broken anything — a smaller gap caught in the same pass).
+
+**⚠️ This requires manual action from the user — this is NOT auto-deployed:** unlike `firestore.rules`/hosting, this repo has **no CLI/clasp pipeline for Apps Script** (confirmed: no `.clasp.json`, `npx clasp` isn't installed). Editing `apps-script/email-relay.gs` in this repo only updates the local backup copy — **the live Google Apps Script Web App deployment is a separate thing that must be updated by hand**:
+1. Open the Apps Script project in the Google account that owns the deployment (`uzesofficial@gmail.com`, per the file header comment).
+2. Replace the script content with the updated `apps-script/email-relay.gs` (or paste in just the new/changed functions + the two new `doPost` cases).
+3. **Deploy → Manage deployments → Edit → New version** (editing the script alone does not update a live Web App deployment; a new version must be published, or the existing "Anyone" Web App deployment must be redeployed at its current URL — if a *new* URL is generated, `EMAIL_RELAY_URL` in the Worker's environment must be updated to match, otherwise everything breaks, not just elections).
+
+**Verification:** Syntax-checked `email-relay.gs` (`node --check` via stdin, since `.gs` isn't a recognized extension for path-based checks) — no errors. `ec-chair.js` re-checked, live preview redirect-only check — zero console errors. **Not verified:** actual email delivery/content — requires the user to manually redeploy the Apps Script (above) and then retest the OTP flow.
+
+**Also re-flags:** this same misrouting bug logic means the vote-receipt email (Chapter 19) had the identical "blank receipt" problem and is fixed by the same deployment step — no separate fix needed, but worth testing both in the same pass once redeployed.
+
+**Next:** User must manually redeploy `apps-script/email-relay.gs` to Google Apps Script (steps above), then retest both the Allow-All OTP email and the vote-receipt email.

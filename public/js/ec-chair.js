@@ -774,7 +774,7 @@ async function openAllowAllOtpModal() {
       const res = await fetch(UPLOAD_WORKER_URL + "/email", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({ type: "ec_allow_all_otp", to: recipient.email, code })
+        body: JSON.stringify({ type: "ec_allow_all_otp", to: recipient.email, code, cycleName: _cycle?.name || "" })
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

@@ -63,6 +63,10 @@ function doPost(e) {
       sendPlacementLetterEmail(data, placPdf);
     } else if (data.type === "admin_otp") {
       sendAdminOtpEmail(data);
+    } else if (data.type === "ec_allow_all_otp") {
+      sendEcAllowAllOtpEmail(data);
+    } else if (data.type === "vote_receipt") {
+      sendVoteReceiptEmail(data);
     } else {
       var pdf = buildReceiptPdf(data);
       sendReceiptEmail(data, pdf);
@@ -116,6 +120,47 @@ function sendAdminOtpEmail(d) {
     htmlBody: body,
     replyTo:  'uzesofficial@gmail.com',
     name:     'UZES Admin'
+  });
+}
+
+// ── Electoral Commission — "allow all students to vote" one-time code ────────
+function sendEcAllowAllOtpEmail(d) {
+  var body =
+    '<p>The Electoral Commission Chairperson has requested to <strong>allow all students to vote</strong>' +
+    (d.cycleName ? ' in <strong>' + esc(d.cycleName) + '</strong>' : '') +
+    ' — including students who have not paid their membership dues.</p>' +
+    '<p>Your one-time confirmation code is:</p>' +
+    '<p style="font-size:28px;font-weight:900;letter-spacing:6px;margin:14px 0">' + esc(d.code || '') + '</p>' +
+    '<p>This code expires in 10 minutes. If you did not expect this request, contact the Electoral Commission before approving it.</p>';
+
+  MailApp.sendEmail({
+    to:       d.to,
+    subject:  'UZES Elections — confirm "allow all students to vote"',
+    htmlBody: body,
+    replyTo:  'uzesofficial@gmail.com',
+    name:     'UZES Elections'
+  });
+}
+
+// ── Electoral Commission — vote receipt (confirms a vote was cast, not choices) ─
+function sendVoteReceiptEmail(d) {
+  var positions = Array.isArray(d.positions) ? d.positions : [];
+  var positionsHtml = positions.length
+    ? '<ul>' + positions.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>'
+    : '';
+
+  var body =
+    '<p>Your vote has been recorded. This receipt confirms <strong>that</strong> you voted — it does not reveal, and is not linked to, your choices.</p>' +
+    '<p><strong>Receipt token:</strong> ' + esc(d.receiptToken || '') + '</p>' +
+    (positionsHtml ? '<p>Positions voted:</p>' + positionsHtml : '') +
+    '<p>Keep this email or your on-screen receipt as proof of participation in case of a dispute.</p>';
+
+  MailApp.sendEmail({
+    to:       d.to,
+    subject:  'UZES Elections — your vote has been recorded',
+    htmlBody: body,
+    replyTo:  'uzesofficial@gmail.com',
+    name:     'UZES Elections'
   });
 }
 
