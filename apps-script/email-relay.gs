@@ -124,18 +124,20 @@ function sendAdminOtpEmail(d) {
 }
 
 // ── Electoral Commission — "allow all students to vote" one-time code ────────
+// Used for BOTH directions — turning it on and turning it back off each need
+// their own OTP confirmation, so d.action carries which one is being confirmed.
 function sendEcAllowAllOtpEmail(d) {
+  var action = d.action || 'allow all students to vote';
   var body =
-    '<p>The Electoral Commission Chairperson has requested to <strong>allow all students to vote</strong>' +
-    (d.cycleName ? ' in <strong>' + esc(d.cycleName) + '</strong>' : '') +
-    ' — including students who have not paid their membership dues.</p>' +
+    '<p>The Electoral Commission Chairperson has requested to <strong>' + esc(action) + '</strong>' +
+    (d.cycleName ? ' in <strong>' + esc(d.cycleName) + '</strong>' : '') + '.</p>' +
     '<p>Your one-time confirmation code is:</p>' +
     '<p style="font-size:28px;font-weight:900;letter-spacing:6px;margin:14px 0">' + esc(d.code || '') + '</p>' +
     '<p>This code expires in 10 minutes. If you did not expect this request, contact the Electoral Commission before approving it.</p>';
 
   MailApp.sendEmail({
     to:       d.to,
-    subject:  'UZES Elections — confirm "allow all students to vote"',
+    subject:  'UZES Elections — confirm "' + action + '"',
     htmlBody: body,
     replyTo:  'uzesofficial@gmail.com',
     name:     'UZES Elections'

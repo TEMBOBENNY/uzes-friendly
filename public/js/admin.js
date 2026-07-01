@@ -989,6 +989,7 @@ function fmtTs(ts) {
 // Build a multi-sheet .xlsx workbook from the financial records → returns a File.
 function buildArchiveWorkbook(payments, incomes, expenses) {
   const XLSX = window.XLSX;
+  if (!XLSX) throw new Error("Excel library failed to load (check your internet connection or ad-blocker, then refresh the page and try again).");
 
   const payRows = [["Date submitted","Receipt#","Student","Comp#","Category",
     "Amount (K)","Method","Ref/Line","Status","Confirmed by","Confirmed at","Notes"]];
@@ -1046,6 +1047,7 @@ function buildArchiveWorkbook(payments, incomes, expenses) {
 // contestants/ecPayments/votes stay in Firestore; this is purely an export.
 function buildElectionArchiveWorkbook(cycle, contestants, ecPayments, positionResults) {
   const XLSX = window.XLSX;
+  if (!XLSX) throw new Error("Excel library failed to load (check your internet connection or ad-blocker, then refresh the page and try again).");
 
   const sumRows = [
     ["UZES Election Archive"],

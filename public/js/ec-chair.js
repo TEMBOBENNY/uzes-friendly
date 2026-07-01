@@ -655,23 +655,13 @@ function wireAllowAllToggle() {
   if (toggle.dataset.wired) return;
   toggle.dataset.wired = "1";
   toggle.addEventListener("change", async () => {
-    const msg = document.getElementById("allowAllMsg");
-    if (toggle.checked) {
-      toggle.checked = false; // stays off visually until the OTP confirms it
-      await openAllowAllOtpModal();
-    } else {
-      if (!confirm('Turn OFF "allow all students to vote"? Only paid-up members will be able to vote.')) {
-        toggle.checked = true; return;
-      }
-      try {
-        await updateDoc(doc(db, "electionCycles", _cycle.id), { allowAllStudents: false });
-        _cycle.allowAllStudents = false;
-        syncAllowAllUI();
-      } catch (err) {
-        toggle.checked = true;
-        if (msg) { msg.style.color = "var(--danger)"; msg.textContent = err.message; }
-      }
-    }
+    // Both directions require OTP now — flipping this back off should be just as
+    // deliberate as turning it on, so a secretary/co-signer can't silently revert
+    // it. Snap the visual state back to the confirmed server value immediately;
+    // it only actually changes once the OTP modal's verify step succeeds.
+    const target = toggle.checked;
+    syncAllowAllUI();
+    await openAllowAllOtpModal(target);
   });
 }
 
@@ -711,13 +701,13 @@ async function sha256Hex(text) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function openAllowAllOtpModal() {
+async function openAllowAllOtpModal(target) {
   let modal = document.getElementById("ecAllowAllOtpModal");
   if (!modal) {
     document.body.insertAdjacentHTML("beforeend", `
       <div id="ecAllowAllOtpModal" style="display:none;position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.45);align-items:center;justify-content:center;padding:16px">
         <div style="background:var(--card);border-radius:12px;padding:24px 26px;max-width:380px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.25)">
-          <p style="font-size:16px;font-weight:700;margin:0 0 6px">Allow all students to vote</p>
+          <p style="font-size:16px;font-weight:700;margin:0 0 6px" id="ecOtpTitle">Allow all students to vote</p>
           <p class="muted small" id="ecOtpIntro" style="margin:0 0 16px"></p>
           <p id="ecOtpErr" class="error" style="margin:0 0 10px;min-height:16px"></p>
           <div id="ecOtpStep1">
@@ -753,6 +743,10 @@ async function openAllowAllOtpModal() {
   sendBtn.style.display = ""; sendBtn.disabled = false; sendBtn.textContent = "Send code";
   modal.style.display = "flex";
 
+  document.getElementById("ecOtpTitle").textContent = target
+    ? "Allow all students to vote"
+    : "Restrict voting to paid-up members";
+
   const recipient = await findOtpRecipient();
   if (!recipient) {
     introEl.textContent = "";
@@ -761,7 +755,8 @@ async function openAllowAllOtpModal() {
     cancelBtn.onclick = () => { modal.style.display = "none"; };
     return;
   }
-  introEl.textContent = `We'll email a one-time code to the ${recipient.role} (${recipient.email}) to confirm this change.`;
+  introEl.textContent = `We'll email a one-time code to the ${recipient.role} (${recipient.email}) to confirm ` +
+    (target ? "allowing all students to vote." : "restricting voting back to paid-up members only.");
 
   async function sendCode() {
     errEl.textContent = "";
@@ -770,11 +765,15 @@ async function openAllowAllOtpModal() {
       const code = String(Math.floor(100000 + Math.random() * 900000));
       const codeHash = await sha256Hex(code);
       const expiresAt = Date.now() + 10 * 60 * 1000;
-      await setDoc(doc(db, "settings", "ecOtp"), { codeHash, requestedBy: _user.uid, expiresAt });
+      await setDoc(doc(db, "settings", "ecOtp"), { codeHash, requestedBy: _user.uid, target, expiresAt });
       const res = await fetch(UPLOAD_WORKER_URL + "/email", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({ type: "ec_allow_all_otp", to: recipient.email, code, cycleName: _cycle?.name || "" })
+        body: JSON.stringify({
+          type: "ec_allow_all_otp", to: recipient.email, code,
+          cycleName: _cycle?.name || "",
+          action: target ? "allow all students to vote" : "restrict voting to paid-up members"
+        })
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -795,6 +794,8 @@ async function openAllowAllOtpModal() {
     errEl.textContent = "";
     const entered = codeInput.value.trim();
     if (!/^\d{6}$/.test(entered)) { errEl.textContent = "Enter the 6-digit code."; return; }
+    const submitBtn = form.querySelector("button[type=submit]");
+    submitBtn.disabled = true; submitBtn.textContent = "Verifying…";
     try {
       const snap = await getDoc(doc(db, "settings", "ecOtp"));
       if (!snap.exists()) { errEl.textContent = "No code requested. Click Send code."; return; }
@@ -804,12 +805,26 @@ async function openAllowAllOtpModal() {
       const enteredHash = await sha256Hex(entered);
       if (enteredHash !== data.codeHash) { errEl.textContent = "Incorrect code."; codeInput.select(); return; }
       await deleteDoc(doc(db, "settings", "ecOtp"));
-      await updateDoc(doc(db, "electionCycles", _cycle.id), { allowAllStudents: true });
-      _cycle.allowAllStudents = true;
+
+      await updateDoc(doc(db, "electionCycles", _cycle.id), { allowAllStudents: data.target });
+
+      // Read back from the server to confirm the write actually stuck, instead of
+      // trusting the local optimistic write — this is exactly what silently
+      // "reverted after refresh" before: a rejected write can still resolve its
+      // promise locally, and only shows up as wrong on the next fresh read.
+      const confirmSnap = await getDoc(doc(db, "electionCycles", _cycle.id));
+      const confirmed = confirmSnap.exists() && confirmSnap.data().allowAllStudents === data.target;
+      if (!confirmed) {
+        throw new Error("The change did not save — please try again or check your connection.");
+      }
+
+      _cycle.allowAllStudents = data.target;
       modal.style.display = "none";
       syncAllowAllUI();
     } catch (err) {
       errEl.textContent = err.message;
+    } finally {
+      submitBtn.disabled = false; submitBtn.textContent = "Verify";
     }
   }
 

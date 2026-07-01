@@ -455,3 +455,42 @@ User confirmed the rules gap (Chapter 14's `electionStats` fix and Chapter 15's 
 **Also re-flags:** this same misrouting bug logic means the vote-receipt email (Chapter 19) had the identical "blank receipt" problem and is fixed by the same deployment step — no separate fix needed, but worth testing both in the same pass once redeployed.
 
 **Next:** User must manually redeploy `apps-script/email-relay.gs` to Google Apps Script (steps above), then retest both the Allow-All OTP email and the vote-receipt email.
+
+---
+
+## Chapter 22 — Commit, push, deploy (email-routing fix)
+
+- Committed (`7956a73`) and pushed (`546a921..7956a73`) — `apps-script/email-relay.gs` fix, `ec-chair.js` cycleName addition.
+- Ran `npx firebase deploy --only hosting` (no `firestore.rules` changes this round, so hosting-only) — released successfully, live at https://uzes-friendly-web.web.app.
+- **Still outstanding, user action required:** the Apps Script itself is not deployed by `firebase deploy` — it needs the manual copy-paste + "New version" redeploy described in Chapter 21 before the OTP/vote-receipt emails will actually render correctly. This is the one remaining manual step blocking full email verification.
+
+**Next:** User to manually redeploy the Apps Script, then retest the full flow end-to-end (OTP email content, vote receipt email content, and everything else in Slices 1–4).
+
+---
+
+## Chapter 23 — Two more bugs found and fixed live
+
+**User report 1:** Apps Script redeployed — OTP email and vote-receipt email now both work correctly (confirms Chapter 21's fix was correct and the manual redeploy step worked).
+
+**User report 2 — Allow-All toggle reverts after refresh:** The OTP flow completed successfully and the toggle showed ON, but refreshing the page showed OFF again. User also asked that turning it back OFF should require OTP too (previously only ON did; OFF just used a plain `confirm()`).
+
+**Root cause investigation:** Reasoned through the rules (`isECChair()`, `electionCycles` update) and found no typo or logic error — the update *should* be permitted. Given the exact symptom (UI shows success immediately, but the server's true state reverts on the next fresh read), the most likely explanation is that Firestore's `updateDoc()` can resolve its promise from a local optimistic write before/without the server actually accepting it, so a rules rejection or other server-side failure can happen invisibly after the UI has already declared success. Rather than keep guessing without live access, fixed this at the root by adding a **post-write verification read-back**: after the OTP-confirmed `updateDoc`, immediately re-`getDoc` the same document and confirm the field actually matches what was just written, throwing a visible error in the modal if it doesn't. This turns any future silent failure (rules rejection, network issue, race condition) into an immediate, visible error instead of a delayed, confusing one.
+
+**File changed:** `public/js/ec-chair.js`:
+- `wireAllowAllToggle()`'s change handler now **always** opens the OTP modal regardless of direction (`target = toggle.checked`), immediately snapping the visual toggle back to the last-confirmed server state so it only actually flips once OTP verification succeeds — matching the user's explicit request that OFF requires OTP too, same as ON.
+- `openAllowAllOtpModal(target)` now takes the intended direction, adjusts the modal title/intro text accordingly ("Allow all students to vote" vs. "Restrict voting to paid-up members"), and includes it in the emailed OTP payload as both `target` (stored in the `settings/ecOtp` doc for `handleVerify` to read back) and a human-readable `action` string (for the email template).
+- `handleVerify()` now writes `allowAllStudents: data.target` (not a hardcoded `true`), and immediately re-reads the document to confirm the write stuck before updating the local UI — the fix described above.
+
+**File changed:** `apps-script/email-relay.gs` — `sendEcAllowAllOtpEmail(d)` now reads `d.action` to describe which direction is being confirmed in both the email body and subject line, instead of always saying "allow all students to vote" regardless of direction. **This also needs the manual Apps Script redeploy step** (same as Chapter 21) before it takes effect live.
+
+**User report 3 — Archive Election crash:** `Cannot read properties of undefined (reading 'utils')` when clicking Archive in Admin.
+
+**Root cause found and independently confirmed:** `window.XLSX` was undefined at the point `buildElectionArchiveWorkbook`/`buildArchiveWorkbook` ran `XLSX.utils.book_new()`. Checked whether the SheetJS CDN script was even loading — network logs showed a 200 response, but `window.XLSX` still came back `undefined` afterward, which is the classic signature of a **Subresource Integrity (SRI) hash mismatch**: the browser fetches the file successfully but silently refuses to *execute* it because the `integrity` attribute doesn't match the file's actual hash. Verified this directly (not just inferred) by downloading the exact CDN file (`curl`) and computing its SHA-384 hash myself: the real hash is `vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw` — completely different from the `OLBgp1Gs...` hash that had been pinned in `admin.html` since before this session (a pre-existing bug, not something introduced this session — the Electoral Commission archive feature was just the first thing to actually exercise this code path).
+
+**File changed:** `public/admin.html` — corrected the `integrity` attribute on the SheetJS `<script>` tag to the verified real hash.
+
+**File changed:** `public/js/admin.js` — added an explicit `if (!XLSX) throw new Error(...)` guard at the top of both `buildArchiveWorkbook()` and `buildElectionArchiveWorkbook()`, with a clear, actionable message ("check your internet connection or ad-blocker, then refresh"). This means if the CDN or an SRI hash ever breaks again for any reason, the failure surfaces as a readable message instead of a cryptic `TypeError`.
+
+**Verification note — a real limitation encountered while testing this:** Tried to verify the hash fix live in preview, but `admin.html` redirects unauthenticated visitors to `login.html` almost instantly (via `guard.js`), so checking `window.XLSX` after navigating there was actually checking `login.html` (which has no XLSX script at all) both before and after the fix — a flawed test methodology on my part, caught before drawing a wrong conclusion from it. The hash correctness itself is independently verified via direct `openssl` hash computation, which doesn't depend on live browser testing at all — that part is solid regardless. Full end-to-end confirmation (clicking Archive and getting a real file) still needs the user's own login session.
+
+**Next:** User to redeploy the updated Apps Script (email wording fix), then retest: (1) Allow-All toggle in both directions, confirming OTP is required each way and the state survives a refresh; (2) Archive Election in Admin, confirming the Excel file downloads correctly.
