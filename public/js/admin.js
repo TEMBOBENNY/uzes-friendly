@@ -1347,10 +1347,29 @@ async function initElectionCard() {
   const statusEl = document.getElementById("electionMgmtStatus");
 
   let active = null;
+  let duplicateWarning = "";
   try {
+    // Unlimited diagnostic check FIRST — the app is only ever supposed to have one
+    // active cycle at a time, but nothing in Firestore enforces that (it's a
+    // client-side UI convention only). If testing ever left more than one behind,
+    // every part of the app that queries "the active cycle" without an orderBy
+    // could non-deterministically pick a DIFFERENT one on each page load — which
+    // looks exactly like settings "randomly" reverting. Surface it here so it's
+    // visible instead of silently causing confusing bugs elsewhere.
+    const allActiveSnap = await getDocs(query(collection(db, "electionCycles"), where("status", "==", "active")));
+    if (allActiveSnap.size > 1) {
+      const names = allActiveSnap.docs.map(d => `"${d.data().name || d.id}"`).join(", ");
+      duplicateWarning = `<p style="background:#fff8e6;border:1px solid #f0d68a;color:#7a5c00;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:12px">⚠️ Found ${allActiveSnap.size} cycles with status "active" at once: ${names}. Only one should be active — archive the extra one(s) below, or contact support if unsure which is the real one.</p>`;
+    }
+
+    // orderBy + limit(1): see the identical comment in ec-chair.js's
+    // loadActiveCycle() — without this, a stray extra "active" cycle from earlier
+    // testing makes query result order non-deterministic across page loads.
     const snap = await getDocs(query(
       collection(db, "electionCycles"),
-      where("status", "==", "active")
+      where("status", "==", "active"),
+      orderBy("createdAt", "desc"),
+      limit(1)
     ));
     if (!snap.empty) active = { id: snap.docs[0].id, ...snap.docs[0].data() };
   } catch (err) {
@@ -1359,14 +1378,15 @@ async function initElectionCard() {
   }
 
   if (active) {
-    renderElectionActive(active, statusEl);
+    renderElectionActive(active, statusEl, duplicateWarning);
   } else {
-    renderElectionCreate(statusEl);
+    renderElectionCreate(statusEl, duplicateWarning);
   }
 }
 
-function renderElectionCreate(statusEl) {
+function renderElectionCreate(statusEl, duplicateWarning = "") {
   statusEl.innerHTML = `
+    ${duplicateWarning}
     <p class="muted small" style="margin-bottom:12px">No active election cycle. Create one to begin.</p>
     <form id="electionCreateForm" style="max-width:400px" autocomplete="off">
       <label for="electionCName">Election name</label>
@@ -1404,7 +1424,7 @@ function renderElectionCreate(statusEl) {
   });
 }
 
-function renderElectionActive(cycle, statusEl) {
+function renderElectionActive(cycle, statusEl, duplicateWarning = "") {
   const phaseLabels = {
     nominations: "Nominations", campaigning: "Campaigning", voting: "Voting",
     counting: "Counting", published: "Published"
@@ -1412,6 +1432,7 @@ function renderElectionActive(cycle, statusEl) {
   const canArchive = cycle.phase === "published";
 
   statusEl.innerHTML = `
+    ${duplicateWarning}
     <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;margin-bottom:14px">
       <div><span class="muted small" style="text-transform:uppercase;letter-spacing:.4px;font-weight:700">Cycle</span><br>${esc(cycle.name || "—")}</div>
       <div><span class="muted small" style="text-transform:uppercase;letter-spacing:.4px;font-weight:700">Phase</span><br>${esc(phaseLabels[cycle.phase] || cycle.phase)}</div>

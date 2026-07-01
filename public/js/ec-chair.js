@@ -6,8 +6,8 @@ import { uploadProof, authHeaders } from "./upload.js";
 import { UPLOAD_WORKER_URL } from "./config.js";
 import { registerFCMToken, sendPush } from "./fcm.js";
 import {
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, arrayUnion,
-  query, where, serverTimestamp
+  collection, doc, getDoc, getDocFromServer, getDocs, setDoc, updateDoc, deleteDoc, arrayUnion,
+  query, where, orderBy, limit, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // Event delegation for all dynamically-generated action buttons
@@ -67,7 +67,17 @@ function getDashGreeting() {
 
 async function loadActiveCycle() {
   try {
-    const snap = await getDocs(query(collection(db, "electionCycles"), where("status", "==", "active")));
+    // orderBy + limit(1) makes this deterministic. Without it, if more than one
+    // cycle was ever left with status:"active" (e.g. testing sessions that create
+    // several cycles), Firestore does not guarantee query result order — a fresh
+    // page load could legitimately return a DIFFERENT doc than the previous load,
+    // which looks exactly like "settings randomly reverting". Newest wins.
+    const snap = await getDocs(query(
+      collection(db, "electionCycles"),
+      where("status", "==", "active"),
+      orderBy("createdAt", "desc"),
+      limit(1)
+    ));
     _cycle = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
   } catch (_) {
     _cycle = null;
@@ -808,14 +818,16 @@ async function openAllowAllOtpModal(target) {
 
       await updateDoc(doc(db, "electionCycles", _cycle.id), { allowAllStudents: data.target });
 
-      // Read back from the server to confirm the write actually stuck, instead of
-      // trusting the local optimistic write — this is exactly what silently
-      // "reverted after refresh" before: a rejected write can still resolve its
-      // promise locally, and only shows up as wrong on the next fresh read.
-      const confirmSnap = await getDoc(doc(db, "electionCycles", _cycle.id));
+      // getDocFromServer (not getDoc) forces a genuine network round-trip instead
+      // of possibly reading back the SDK's own local optimistic cache — a plain
+      // getDoc() here could "confirm" a write that the server actually rejected,
+      // since pending local mutations are overlaid on cached reads until the
+      // server round-trip completes. This is what let the previous fix pass here
+      // even though the setting still reverted after a real page refresh.
+      const confirmSnap = await getDocFromServer(doc(db, "electionCycles", _cycle.id));
       const confirmed = confirmSnap.exists() && confirmSnap.data().allowAllStudents === data.target;
       if (!confirmed) {
-        throw new Error("The change did not save — please try again or check your connection.");
+        throw new Error("The change did not save to the server — please try again or check your connection.");
       }
 
       _cycle.allowAllStudents = data.target;

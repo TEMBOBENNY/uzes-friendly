@@ -494,3 +494,36 @@ User confirmed the rules gap (Chapter 14's `electionStats` fix and Chapter 15's 
 **Verification note — a real limitation encountered while testing this:** Tried to verify the hash fix live in preview, but `admin.html` redirects unauthenticated visitors to `login.html` almost instantly (via `guard.js`), so checking `window.XLSX` after navigating there was actually checking `login.html` (which has no XLSX script at all) both before and after the fix — a flawed test methodology on my part, caught before drawing a wrong conclusion from it. The hash correctness itself is independently verified via direct `openssl` hash computation, which doesn't depend on live browser testing at all — that part is solid regardless. Full end-to-end confirmation (clicking Archive and getting a real file) still needs the user's own login session.
 
 **Next:** User to redeploy the updated Apps Script (email wording fix), then retest: (1) Allow-All toggle in both directions, confirming OTP is required each way and the state survives a refresh; (2) Archive Election in Admin, confirming the Excel file downloads correctly.
+
+---
+
+## Chapter 24 — Commit, push, deploy (OTP symmetry + Excel fix)
+
+- User confirmed the Apps Script was already manually redeployed before this commit.
+- Committed (`b6373ff`) and pushed (`7956a73..b6373ff`) — symmetric Allow-All OTP + post-write verification, email wording fix, SheetJS SRI hash fix + defensive guard.
+- Ran `npx firebase deploy --only hosting` (no rules changes this round) — released successfully, live at https://uzes-friendly-web.web.app.
+
+**Current state:** All known bugs reported so far are fixed and deployed, both on hosting and (per user) the Apps Script. Awaiting the user's retest of both fixes.
+
+**Next:** User to retest (1) Allow-All toggle both directions with a refresh in between, (2) Archive Election → confirm the Excel file actually downloads. Report any further issues.
+
+---
+
+## Chapter 25 — Toggle STILL reverting: found the real root cause
+
+**User report:** Archive Election now works. Allow-All toggle still reverts to OFF after refresh even with Chapter 23's post-write verification fix. User floated a workaround (two mutually-exclusive toggles) but asked to fix the real bug first if possible. Also: user disclosed they "removed the enforcements temporarily" (not yet clarified exactly what) and asked for a full codebase overview once fixes are done, since a full test election has since been run, published, and archived — only Disqualify and the toggle remain to verify.
+
+**Why Chapter 23's fix didn't actually catch it:** The verification read added in Chapter 23 used plain `getDoc()` right after the `updateDoc()`. Firestore's client SDK (this app uses `persistentLocalCache` with multi-tab support, per `firebase.js`) overlays pending local writes on top of cached reads until the server round-trip completes — so `getDoc()` immediately after a write can "confirm" a write that the server hasn't actually accepted yet (or ultimately rejects), because it's reading back the SDK's own optimistic local state, not a guaranteed server response. This explains exactly the reported symptom: verification passed, no error shown, yet a genuine page refresh later revealed the server's real (different) state.
+
+**Second, independently-found root cause — likely the bigger one:** None of the three places that find "the active election cycle" (`ec-chair.js`, `student.js`, `admin.js`) ordered their query results. All three just did `where("status","==","active")` and took `docs[0]`. **Firestore does not guarantee result order for a query with no `orderBy`.** If more than one `electionCycles` document ever ended up with `status:"active"` at the same time — very plausible after an extended testing session (create → test → archive → create again, repeated) — different page loads could legitimately return a *different* document as "the" active cycle, each with its own independent `allowAllStudents` value. That would look exactly like a setting "randomly" flipping on refresh, because it wasn't the same setting being read each time.
+
+**Fixes applied:**
+1. **`public/js/ec-chair.js`, `public/js/student.js`, `public/js/admin.js`** — all three "find the active cycle" queries now add `orderBy("createdAt", "desc"), limit(1)`, making "most recently created" the deterministic, guaranteed winner instead of an arbitrary one. Requires a new composite index (`electionCycles`: `status ASC, createdAt DESC`) — added to `firestore.indexes.json`, matching the exact pattern this project already uses for `payments` composite indexes (confirmed by reading the existing file — this project's queries do require explicit composite indexes for equality+orderBy combos, not just in theory but as established practice here).
+2. **`public/js/ec-chair.js`** — swapped the Chapter 23 verification read from `getDoc()` to `getDocFromServer()`, which forces a genuine network round-trip and cannot be satisfied by the SDK's local optimistic cache. This is now a real guarantee, not just a best-effort one.
+3. **`public/js/admin.js`** — added a **visible diagnostic**: `initElectionCard()` now also runs an unlimited (no `limit`) count of `status:"active"` cycles, and if more than one exists, shows a clear warning banner in the Election Management card naming all of them, so the user can see directly (without needing my help) whether duplicate active cycles are the actual cause here, and archive the extras. I don't have live database read access in this session (no service account, no `gcloud`, and generating a fresh CLI token via `login:ci` seemed like the wrong kind of credential to create unprompted), so I couldn't confirm or rule out duplicates myself — this banner is the mechanism for the user to check directly.
+
+**Verification:** All three JS files syntax-checked (`node --check`) — no errors. `firestore.indexes.json` validated as parseable JSON. Live preview redirect-only check on `/ec-chair.html` — zero console errors. **Not verified:** whether duplicate active cycles are actually present (needs the user to check the new admin warning banner), and the toggle's actual behavior after a real refresh (needs live testing + the new index to be deployed first, otherwise the reordered queries will throw "this query requires an index" errors — must deploy indexes before this fix can even run without a NEW breakage).
+
+**Outstanding question for the user before doing the requested full overview:** what exactly was "removed temporarily" (a Firestore rule? the OTP requirement in code? something in the Firebase console?) — need to know this before reviewing the current deployed state, since it may differ from what's in this repo.
+
+**Next:** Deploy (hosting + firestore, to push both the new composite index and the code fixes) before the user retests — otherwise the fixed queries will fail outright without the index. Then ask the user to clarify what was temporarily removed, and proceed with the requested full codebase overview.

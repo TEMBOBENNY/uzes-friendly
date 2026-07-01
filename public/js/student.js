@@ -2,7 +2,7 @@ import { auth, db } from "./firebase.js";
 import { protect } from "./guard.js";
 import {
   collection, doc, addDoc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query,
-  where, orderBy, serverTimestamp
+  where, orderBy, limit, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { uploadProof, authHeaders } from "./upload.js";
 import { initSubHero } from "./subhero.js?v=4";
@@ -614,7 +614,15 @@ async function isPaidUpMember(user) {
 
 async function loadElectionCycle() {
   try {
-    const snap = await getDocs(query(collection(db, "electionCycles"), where("status", "==", "active")));
+    // orderBy + limit(1): see the identical comment in ec-chair.js's
+    // loadActiveCycle() — without this, a stray extra "active" cycle from earlier
+    // testing makes query result order non-deterministic across page loads.
+    const snap = await getDocs(query(
+      collection(db, "electionCycles"),
+      where("status", "==", "active"),
+      orderBy("createdAt", "desc"),
+      limit(1)
+    ));
     _electionCycle = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
   } catch (_) { _electionCycle = null; }
 }
