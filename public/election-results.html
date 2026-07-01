@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Election Results — UZES</title>
+  <link rel="icon" type="image/png" href="img/uzes-logo.png">
+  <link rel="stylesheet" href="css/styles.css?v=7">
+  <style>
+    .result-header { text-align: center; margin-bottom: 28px; }
+    .result-header h1 { margin-bottom: 4px; }
+    .result-section { margin-bottom: 32px; }
+    .result-pos-title { font-size: 18px; font-weight: 800; margin-bottom: 14px; }
+    .result-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
+    .result-card {
+      background: var(--card); border: 1.5px solid var(--line); border-radius: var(--radius);
+      padding: 18px 14px; text-align: center; box-shadow: var(--shadow);
+    }
+    .result-photo { width: 92px; height: 92px; border-radius: 50%; object-fit: cover; margin: 0 auto 10px; background: #f0f4ff; }
+    .result-name { font-weight: 700; font-size: 15px; }
+    .result-meta { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+    .result-votes { font-weight: 700; font-size: 13px; color: var(--green); margin-top: 8px; }
+    .result-manifesto {
+      display: inline-block; margin-top: 10px; font-size: 12px; font-weight: 600;
+      color: var(--green); text-decoration: none;
+    }
+    .result-manifesto:hover { text-decoration: underline; }
+    .result-stats-card {
+      margin-top: 24px; padding: 16px 18px; border-top: 1px solid var(--line); text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="pub-nav">
+    <div class="pub-nav-inner">
+      <a href="index.html" class="pub-nav-brand">
+        <span class="logo-chip nav"><img src="img/uzes-logo.png" alt="UZES"></span>
+        <span class="pub-nav-name">The University of Zambia Engineering Society</span>
+      </a>
+      <div class="pub-nav-links" id="navLinks">
+        <a href="index.html">Home</a>
+        <a href="about.html">About</a>
+        <a href="activities.html">Activities</a>
+        <a href="faq.html">FAQ</a>
+        <a href="contact.html">Contact</a>
+        <a href="support.html">Support</a>
+      </div>
+      <div class="pub-nav-end">
+        <button type="button" class="theme-toggle-btn theme-toggle-nav" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+        <a href="login.html" class="pub-nav-signin">Sign in</a>
+        <button class="pub-nav-toggle" id="navToggle" aria-label="Open menu">&#9776;</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="pub-hero-sm">
+    <h1>Election Results</h1>
+    <p>UZES Executive Election outcomes</p>
+  </div>
+
+  <main class="pub-main" id="resultsMain">
+    <div class="sk sk-card" style="height:220px;margin-bottom:16px"></div>
+    <div class="sk sk-card" style="height:220px"></div>
+  </main>
+
+  <footer class="pub-footer">
+    <div class="footer-inner">
+      <p class="footer-tagline">The University of Zambia Engineering Society · School of Engineering</p>
+      <p class="footer-copy">
+        &copy; <span id="footerYear"></span> UZES ·
+        <a href="mailto:uzesofficial@gmail.com">uzesofficial@gmail.com</a>
+      </p>
+    </div>
+  </footer>
+
+  <script type="module" src="js/election-results.js"></script>
+  <script src="js/init.js"></script>
+  <script src="js/chrome.js"></script>
+</body>
+</html>

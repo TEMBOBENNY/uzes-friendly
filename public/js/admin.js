@@ -5,6 +5,7 @@ import { adminTabs } from "./nav.js";
 import { firebaseConfig, UPLOAD_WORKER_URL } from "./config.js";
 import { uploadArchive, deleteUpload, deleteUploadPrefix, authHeaders } from "./upload.js";
 import { audit } from "./audit.js";
+import { registerFCMToken } from "./fcm.js";
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
   query, where, orderBy, limit, startAfter, serverTimestamp, writeBatch
@@ -198,6 +199,9 @@ let systemVerified = false; // cleared each page load — re-auth required per s
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 protect(["admin"], (user, profile) => {
   adminUser = user; adminProfile = profile;
+  // Registers this device for push so EC phase-change notices (exec-only v1,
+  // see ec-chair.js) can actually reach someone — students already do this.
+  registerFCMToken(user.uid, profile.__collection || "executives").catch(() => {});
   initSubHero(user, profile, { page: "admin", active: "tab-dash", tabs: adminTabs() });
   renderAdminDash();      // explicit render so the dashboard never relies on shOnTab timing
   loadStudents();         // preload for fast tab switch
@@ -1037,6 +1041,56 @@ function buildArchiveWorkbook(payments, incomes, expenses) {
   return new File([blob], name, { type: blob.type });
 }
 
+// Build a multi-sheet .xlsx workbook for an Electoral Commission cycle archive.
+// Unlike the financial archive above, this never deletes anything — the cycle's
+// contestants/ecPayments/votes stay in Firestore; this is purely an export.
+function buildElectionArchiveWorkbook(cycle, contestants, ecPayments, positionResults) {
+  const XLSX = window.XLSX;
+
+  const sumRows = [
+    ["UZES Election Archive"],
+    ["Cycle", cycle.name || ""],
+    ["Generated", new Date().toLocaleString("en-ZM")],
+    ["Published at", fmtTs(cycle.publishedAt)],
+    [],
+    ["Contestants", contestants.length],
+    ["EC fee submissions", ecPayments.length],
+    ["EC fees confirmed", ecPayments.filter(p => p.status === "confirmed").length],
+  ];
+
+  const contRows = [["Position","Name","Comp#","Department","Year","Status","Manifesto URL"]];
+  contestants.forEach(c => contRows.push([
+    c.position||"", c.studentName||"", c.compNumber||"", c.department||"",
+    c.yearOfStudy||"", c.status||"", c.manifestoUrl||""
+  ]));
+
+  const payRows = [["Student","Comp#","Department","Year","Amount (K)","Method","Status","Reviewed by"]];
+  ecPayments.forEach(p => payRows.push([
+    p.studentName||"", p.compNumber||"", p.department||"", p.yearOfStudy||"",
+    Number(p.amount||0), p.method||"", p.status||"", p.reviewedBy||""
+  ]));
+
+  const resRows = [["Position","Contestant","Votes","Winner?"]];
+  Object.entries(positionResults || {}).forEach(([pos, r]) => {
+    const winnerIds = Array.isArray(r.winner) ? r.winner : (r.winner ? [r.winner] : []);
+    Object.entries(r.contestants || {}).forEach(([cid, count]) => {
+      const c = contestants.find(x => x.id === cid);
+      resRows.push([pos, c?.studentName || cid, count, winnerIds.includes(cid) ? "Yes" : ""]);
+    });
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sumRows), "Summary");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(contRows), "Contestants");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(payRows), "EC Payments");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resRows), "Results");
+
+  const out  = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const name = `UZES_Election_Archive_${new Date().toISOString().slice(0,10)}.xlsx`;
+  return new File([blob], name, { type: blob.type });
+}
+
 async function runYearReset() {
   const statusEl = document.getElementById("resetStatus");
   const errEl    = document.getElementById("resetErr");
@@ -1372,17 +1426,45 @@ function renderElectionActive(cycle, statusEl) {
       if (!confirm(`Archive "${cycle.name}"? This closes the cycle so a new one can be created. This cannot be undone.`)) return;
       const msg = document.getElementById("archiveElectionMsg");
       archiveBtn.disabled = true;
-      msg.style.color = "var(--muted)"; msg.textContent = "Archiving…";
+      msg.style.color = "var(--muted)"; msg.textContent = "Loading election data…";
       try {
-        // Soft archive only — flips status and stamps the time. The full
-        // electionArchives snapshot + Excel export is built in a later slice
-        // (Workflow §5, Slice 4 / P7); original data stays in place either way.
+        const [contSnap, payQ, statsSnap] = await Promise.all([
+          getDocs(query(collection(db, "contestants"), where("cycleId", "==", cycle.id))),
+          getDocs(query(collection(db, "ecPayments"), where("cycleId", "==", cycle.id))),
+          getDoc(doc(db, "electionStats", cycle.id))
+        ]);
+        const contestants = contSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const ecPayments  = payQ.docs.map(d => ({ id: d.id, ...d.data() }));
+        const positionResults = statsSnap.exists() ? (statsSnap.data().positionResults || {}) : {};
+
+        msg.textContent = "Building Excel archive…";
+        const file = buildElectionArchiveWorkbook(cycle, contestants, ecPayments, positionResults);
+
+        msg.textContent = "Uploading archive to Cloudflare…";
+        const archiveUrl = await uploadArchive(file, "Archive");
+
+        msg.textContent = "Saving archive record…";
+        await setDoc(doc(db, "electionArchives", cycle.id), {
+          cycleName:       cycle.name || "",
+          publishedAt:     cycle.publishedAt || null,
+          archivedAt:      serverTimestamp(),
+          contestantCount: contestants.length,
+          ecPaymentCount:  ecPayments.length,
+          positionResults,
+          archiveUrl
+        });
+
+        // Soft archive only — flips status and stamps the time. Original data in
+        // contestants/ecPayments/votes stays in place; nothing is deleted (Flag 5,
+        // same rule as the year-end reset must NOT apply here).
         await updateDoc(doc(db, "electionCycles", cycle.id), {
           status: "archived",
           archivedAt: serverTimestamp()
         });
-        msg.style.color = "var(--ok)"; msg.textContent = "Archived.";
-        setTimeout(() => initElectionCard(), 1200);
+
+        msg.style.color = "var(--ok)";
+        msg.innerHTML = `Archived. <a href="${archiveUrl}" target="_blank" rel="noopener">Download the Excel archive</a>`;
+        setTimeout(() => initElectionCard(), 2500);
       } catch (err) {
         msg.style.color = "var(--danger)"; msg.textContent = err.message;
         archiveBtn.disabled = false;

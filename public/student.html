@@ -143,6 +143,32 @@
     [data-theme="dark"] .btn-lib.danger:hover { background:#3a2020; }
     [data-theme="dark"] .btn-lib.approve { background:#1a2e24;color:#3fb950;border-color:#238636; }
     [data-theme="dark"] .btn-lib.approve:hover { background:#1e3a2a; }
+
+    /* ── Elections ────────────────────────────────────────────────────── */
+    .elec-postabs { display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;border-bottom:2px solid var(--line); }
+    .elec-postab {
+      padding:9px 14px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;
+      color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;
+    }
+    .elec-postab.active { color:var(--green);border-bottom-color:var(--green); }
+    .elec-postab.done::after { content:" ✓"; color:var(--ok); }
+    .elec-pospanel.hidden { display:none; }
+    .contestant-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:16px; }
+    .contestant-card {
+      background:var(--card);border:1.5px solid var(--line);border-radius:var(--radius);
+      padding:16px;text-align:center;box-shadow:var(--shadow);cursor:pointer;transition:border-color .15s;
+    }
+    .contestant-card.selected { border-color:var(--green);box-shadow:0 0 0 2px rgba(30,140,80,.25); }
+    .contestant-card.locked { cursor:default;opacity:.6; }
+    .contestant-photo { width:88px;height:88px;border-radius:50%;object-fit:cover;margin:0 auto 10px;background:#f0f4ff; }
+    .contestant-name { font-weight:700;font-size:14px; }
+    .contestant-meta { font-size:12px;color:var(--muted);margin-top:2px; }
+    .contestant-select { margin-top:10px; }
+    .elec-done-btn { width:auto;padding:9px 22px;margin-top:6px; }
+    .elec-confirm-panel { background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-top:20px;box-shadow:var(--shadow); }
+    .elec-confirm-row { display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px; }
+    .elec-confirm-row:last-child { border-bottom:none; }
+    .elec-locked-msg { text-align:center;padding:40px 24px;color:var(--muted); }
   </style>
 </head>
 <body>
@@ -482,6 +508,17 @@
     <!-- ── Attachment Placement ──────────────────────────────────────────── -->
     <div id="tab-placement" class="tab-panel hidden">
       <!-- Content injected by placement.js -->
+    </div>
+
+    <!-- ── Elections ──────────────────────────────────────────── -->
+    <div id="tab-election" class="tab-panel hidden">
+      <div id="electionLoading">
+        <div class="sk sk-card" style="height:120px"></div>
+      </div>
+      <div id="electionContent" style="display:none">
+        <!-- Gated states (closed / not paid / already voted) or the full ballot UI,
+             injected by student.js's initElection(). -->
+      </div>
     </div>
 
   </main>

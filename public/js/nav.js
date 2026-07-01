@@ -26,6 +26,9 @@ export function studentTabs(current) {
     onStudent
       ? { id: "tab-placement", label: "Attachment Placement", icon: "placement" }
       : { id: "placement",     label: "Attachment Placement", icon: "placement", href: "student.html#tab-placement" },
+    onStudent
+      ? { id: "tab-election", label: "Elections", icon: "check" }
+      : { id: "election",     label: "Elections", icon: "check", href: "student.html#tab-election" },
   ];
 }
 

@@ -156,12 +156,18 @@ service cloud.firestore {
 
     // Settings hold sensitive configuration — access is role-gated per document.
     // sysOtp holds the one-time-code hash for the System tab unlock — admin only.
+    // ecOtp holds the EC Chair's "allow all students to vote" OTP — separate doc
+    // from sysOtp (Flag 25) so an admin and the EC Chair can each have a live OTP
+    // request at the same time without colliding. isECChair() is defined further
+    // down (near the Electoral Commission rules); Firestore rule functions are not
+    // order-sensitive within the same service block, unlike imperative code.
     // emailRelay holds only the isTrial flag — exec-readable for operational use.
     match /settings/{id} {
       allow read:  if id == 'sysOtp'    ? isAdmin()
+                 : id == 'ecOtp'      ? (isECChair() || isAdmin())
                  : id == 'emailRelay'  ? isExec()
                  : isExec();
-      allow write: if isAdmin();
+      allow write: if id == 'ecOtp' ? (isECChair() || isAdmin()) : isAdmin();
     }
 
     match /auditLog/{id} {
@@ -579,9 +585,13 @@ service cloud.firestore {
       allow read, write: if signedIn() && myActive() && myUid() == uid;
     }
 
-    // Live vote aggregates — single doc per cycle, EC Chair/Admin only.
+    // Live vote aggregates — single doc per cycle (doc ID == cycleId). EC Chair/Admin
+    // always; public (unauthenticated) once the cycle is published, so
+    // election-results.html can read per-contestant vote counts without exposing
+    // the raw /votes collection (which stays EC-Chair/Admin-only for ballot secrecy).
     match /electionStats/{id} {
-      allow read:  if isECChair() || isAdmin();
+      allow read:  if isECChair() || isAdmin() ||
+                   get(/databases/$(database)/documents/electionCycles/$(id)).data.phase == 'published';
       allow write: if isECChair() || isAdmin();
     }
 

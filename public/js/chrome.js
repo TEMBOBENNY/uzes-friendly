@@ -203,3 +203,31 @@ const UZES_WHATSAPP_NUMBER = "260971457112"; // ← CHANGE THIS TO YOUR SUPPORT 
     else { indicator.style.height = "0"; }
   });
 })();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ELECTION RESULTS — nav link injection (public pages only)
+// One lightweight query per page load; only adds the link once a cycle has been
+// published (Flag 22 — negligible cost, no query at all on pages without #navLinks).
+// ═══════════════════════════════════════════════════════════════════════════════
+(function () {
+  const navLinks = document.getElementById("navLinks");
+  if (!navLinks) return;
+  if (location.pathname.includes("election-results.html")) return;
+
+  import("./firebase-public.js").then(async ({ db }) => {
+    const { collection, getDocs, query, where, limit } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    try {
+      const snap = await getDocs(query(
+        collection(db, "electionCycles"),
+        where("phase", "==", "published"),
+        limit(1)
+      ));
+      if (snap.empty) return;
+      const link = document.createElement("a");
+      link.href = "election-results.html";
+      link.textContent = "Election Results";
+      navLinks.appendChild(link);
+    } catch (_) { /* best-effort — nav still works without this link */ }
+  }).catch(() => {});
+})();

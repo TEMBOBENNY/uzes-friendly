@@ -206,3 +206,203 @@ The reverse check (redirect away from `ec-chair.html` if position isn't `EC Chai
 **Slice 1 status:** All 5 planned steps done (position, `ec-chair.html`, `ec-chair.js`, `nav.js`, redirects, `firestore.rules`, admin System tab card). What's still unverified end-to-end: actually creating a cycle + an EC Chairperson account + confirming the redirect fires — needs a real login session, which the user should do manually or provide credentials for.
 
 **Next:** Either (a) user tests Slice 1 live (create cycle, create EC Chair account, confirm redirect), or (b) proceed straight into Slice 2 (student My Finance EC fee category + EC Chair Nominations tab) and defer live testing to a combined checkpoint.
+
+---
+
+## Chapter 10 — Commit, push, and production deploy
+
+**User report:** Could not create the EC Chairperson account testing on `localhost:5000`.
+
+**Root cause identified:** This repo's local dev server (`npx serve public`) only serves static files — it talks to the **real** `uzes-friendly-web` Firebase project for Auth/Firestore (no local emulator wired into `firebase.js`). The new `firestore.rules` changes (Chapter 8) were sitting in the working tree only — never deployed — so the live Firestore was still running the **old** rules with no `ecPayments`/`electionCycles`/etc. collections defined at all (default-deny). That's almost certainly why the EC account/cycle flow didn't work locally: it's not a localhost issue, it's an undeployed-rules issue.
+
+**Actions taken (per explicit user request "commit and push"):**
+1. `git add` on all EC-related changes (`firestore.rules`, `admin.html`, `admin.js`, `executive.js`, `nav.js`, `ec-chair.html`, `ec-chair.js`, both planning docs, this session report) **plus** several stray untracked session-report `.md` files left over from prior sessions (`SESSION-REPORT-2026-06-30-P3.md`, `-2026-07-07-P2.md`, `-2026-07-07.md`, `-APPCHECK-EMAIL-FIXES.md`, `-PLACEMENT-PHASE5-8.md`) that were sitting uncommitted — folded into the same commit since they're harmless docs and shouldn't be left stranded.
+2. Committed as `16bb8f3` — "Add Electoral Commission foundation (Slice 1)".
+3. Pushed to `origin/main` (`3b83ea0..16bb8f3`).
+4. **Checked `.github/workflows/`** — confirmed the only CI workflow is `build-android.yml` (APK build). There is **no CI step that deploys Firestore rules or Firebase Hosting** — pushing to GitHub alone does not update the live site or live rules.
+5. **Asked the user** whether to deploy now or let them do it manually — user chose "deploy now."
+6. Ran `npx firebase deploy --only hosting,firestore:rules`. Result: rules compiled successfully and released to `cloud.firestore`; hosting uploaded and released. Live at https://uzes-friendly-web.web.app.
+
+**Current state:** The EC foundation (position, `ec-chair.html`/`.js`, redirects, rules, Admin System-tab card) is now live in production. The user should be able to create the EC Chairperson account and an election cycle against the real deployed site now (not localhost).
+
+**Reminder for future sessions:** This repo has **no automatic Firestore-rules or Hosting deploy in CI** — only `git push` triggers the Android APK workflow. Any `firestore.rules` or `public/` change made in a coding session must be **manually deployed** with `firebase deploy` (scoped to `hosting,firestore:rules` as needed) before the user can test it live — a `git push` alone is not sufficient and this has already caused one false "it's broken" report today.
+
+**Next:** Await user's live test results (create EC Chair account + election cycle + confirm redirect against production), then proceed to Slice 2 (student My Finance EC fee category + EC Chair Nominations tab pipeline).
+
+---
+
+## Chapter 11 — Live test result: App Check error (pre-existing, not EC-related)
+
+**User report:** Creating the EC Chairperson account on the live site failed with `Firebase: Error (auth/firebase-app-check-token-is-invalid.)`. Worked around it by changing an **existing** executive's position to `EC Chairperson` to preview the dashboard instead.
+
+**Assessment:** This is the same pre-existing App Check/reCAPTCHA problem already documented in `APPCHECK-RECOVERY-GUIDE.md` (and seen earlier in this session's own preview testing — Chapter 7 — as a 403 on the reCAPTCHA token-exchange endpoint). It is **not caused by anything in this session's EC changes**; it affects any authenticated write action across the whole app, not just EC account creation. Not fixing it in this session — out of scope for the EC feature build and there's already a dedicated recovery guide for it.
+
+**Confirmed working via the workaround:** EC dashboard (`ec-chair.html`) rendered correctly for a repurposed executive account — meaning the redirect logic (`executive.js` → `ec-chair.html`, and the reverse check in `ec-chair.js`) **works end-to-end in production**, which was the main thing Slice 1 needed to prove. The App Check hiccup only blocked *creating a new* account, not the redirect/dashboard itself.
+
+**User decision:** Move on to Slice 2 rather than fix App Check now.
+
+**Next:** Begin Slice 2 — student My Finance "EC Nomination Fee" category (gated by paid-membership + not 5th Year/Graduate) and the EC Chair Nominations tab (approve payment → "Add as Contestant", no manual bypass).
+
+---
+
+## Chapter 12 — Slice 2: student My Finance EC fee + EC Chair Nominations tab
+
+**File changed:** `public/js/student.js`
+- Added `EC_INELIGIBLE_YEARS = ["5th Year", "Graduate"]` inline (Flag 9 — no shared constants module in this codebase, kept local).
+- `checkElectionNominationEligibility()` — gates the EC fee option on: not 5th Year/Graduate, an active `electionCycles` doc exists, its `phase === "nominations"` (decision: fees should stop being accepted once nominations close, even though plan §9.1 only said "cycle is active" — logged as a deliberate interpretation), and the student has a confirmed `Membership Dues` payment (reused the exact query `loadMembership()` already uses).
+- `buildCategorySelect()` — async, appends `"EC Nomination Fee"` to the existing `CATEGORIES` list only when eligible. `buildSelects()` now calls this instead of statically listing categories (Flag 8 — `CATEGORIES` const itself is untouched).
+- Payment submit handler: added an `if (category === "EC Nomination Fee")` branch **inside** the existing `payForm` submit listener (Flag 7 — not a separate listener, so upload/proof/error handling isn't duplicated). Writes to `ecPayments` (not `payments`) with `cycleId`, `department`, `yearOfStudy` fields that the plain `payments` schema doesn't have. After a successful submit of either kind, also calls `buildCategorySelect()` again to refresh eligibility (e.g. a student who just got their Membership Dues confirmed elsewhere becomes newly eligible without a page reload) — a partial answer to Flag 29 without adding a full re-check on every tab focus.
+- Confirmed (no code change needed): `renderHistoryList()` still only queries `payments`, so EC fees correctly stay out of the student's own payment history, per plan's Q/Flag 10 decision.
+
+**File rewritten:** `public/js/ec-chair.js` — Nominations tab is now fully implemented, plus the Dashboard was upgraded from a static placeholder to real data:
+- `loadActiveCycle()` — shared helper, used by both Dashboard and Nominations.
+- **Dashboard:** now shows the real cycle name, current phase, and two live KPI cards (pending nominations count, approved contestant count) once a cycle exists. Phase-advance buttons and the full KPI set (fees collected, votes cast, turnout) are explicitly deferred to Slice 3/4 — noted directly in the UI copy so it doesn't look broken/half-done.
+- **Nominations tab:** loads `ecPayments` + `contestants` for the active cycle in parallel. Pending payments get Approve/Reject (with a reject-reason form, mirroring the exact `industrial-secretary.js` reject-form pattern). Confirmed payments get **"+ Add as Contestant"** — and only that; once a contestant already exists for a payment, the button is replaced with a checkmark showing the assigned position (Flag: "no manual bypass" — there is no other way to create a `contestants` doc in this UI).
+- **Add as Contestant modal:** built dynamically (matches the `viewProof` pattern in `student.js` — inject once, reuse). Position dropdown (8 `BALLOT_POSITIONS`), required photo upload (reuses `uploadProof()` from `upload.js` with folder `elections/{cycleId}/contestants`, per Flag 14 — custom progress callback updates the modal's own progress text, not any payment-submit button), optional manifesto URL. **Warning banner** recomputes live on position change: shows if the student is 5th Year/Graduate (constitutionally ineligible generally) OR if the selected position is `Chairperson`/`Secretary General` and the student isn't 4th Year (Art. 9(a), per the user's Chapter 4 clarification — Vice Secretary General does NOT trigger this warning). Banner is advisory only — EC Chair can still save, matching the Q1 decision.
+- **Contestant roster:** grouped by position, shows status pill, and a "Disqualify" button on approved contestants (prompts for a reason, sets `status: "disqualified"` — hidden from future ballot rendering in Slice 3, but kept in the record per plan §2.10's edge case).
+- Overview and Results tabs remain scaffolded placeholders (Slice 4 and Slice 3 respectively) — untouched this chapter.
+
+**Verification:**
+- Both files syntax-checked with `node --input-type=module --check` — no errors.
+- Live in preview: navigated to `/student.html` and `/ec-chair.html` unauthenticated — both correctly redirect to `/login.html`, zero console errors (confirms all new imports/functions parse and load without error).
+- **Not verified live:** the actual authenticated flow (submit EC fee as a student → approve as EC Chair → add as contestant → see it in the roster). This needs real student + EC Chair login sessions, which aren't available in this tool session. Self-reviewed the logic carefully against the `firestore.rules` written in Chapter 8 (`ecPayments` update requires `isECChair()||isAdmin()` — matches `ecApprovePay`/`ecRejectPay`; `contestants` create requires the same — matches the modal's `setDoc` call) to catch rule/code mismatches before they'd surface at test time.
+
+**Next:** User to test Slice 2 live (submit an EC fee as a student, approve + add as contestant as EC Chair) — will need a fresh `firebase deploy` first, same as Slice 1, since there's no CI auto-deploy (Chapter 10's reminder still applies). After that, Slice 3 begins: student Elections tab (ballot UI), `votes`/`voterTurnout`/`draftSelections`, phase transitions, Results tab with tie detection/revote, and the public results page.
+
+---
+
+## Chapter 13 — Live test confirmed: Nominations pipeline works
+
+**User report:** Successfully uploaded/added a contestant via the Nominations tab on localhost. This confirms the full Slice 2 pipeline works against the real deployed Firestore (payment approve → "Add as Contestant" modal → photo upload → `contestants` doc created → shows in roster) — no reported bugs.
+
+**Note:** This was tested against whatever was last deployed (Chapter 10's `firebase deploy --only hosting,firestore:rules`, before Slice 2 code existed on that deploy) — actually, re-checking: the Slice 2 code (student.js EC fee branch, ec-chair.js Nominations tab) was written in Chapter 12 but **not yet deployed**. If the user tested against localhost and it worked, `ec-chair.html`/`ec-chair.js` are static files served directly by the local dev server (no deploy needed for JS/HTML changes to be visible locally) — only `firestore.rules` changes require a deploy to take effect, and those were already deployed in Chapter 10 before Slice 2 began, so no rules gap here. Confirmed: the Slice 2 code changes are pure client-side JS/HTML which the local `npx serve public` picks up directly from disk — deploy is only required for the user to test on the **production URL**, not localhost. Local testing already exercises the real Firestore backend (per Chapter 10's root-cause note), so this live pass is a genuine end-to-end confirmation.
+
+**User decision:** Proceed straight to Slice 3 (Voting + Results) — no separate commit/push/deploy checkpoint requested yet.
+
+**Next:** Begin Slice 3 — student Elections tab (gated ballot UI, position sub-tabs, Committee Members multi-select), `votes`/`voterTurnout`/`draftSelections` collections, EC Chair phase transitions (Nominations → Campaigning → Voting → Counting → Published), Results tab (live counts, tie detection, revote), and the public `election-results.html` page.
+
+---
+
+## Chapter 14 — Slice 3: Voting + Results (full slice, built in one pass)
+
+Built the entire remaining slice in sequence since the pieces are tightly coupled (phase transitions gate the ballot; the ballot writes the votes the Results tab counts; Results feeds the public page). Verified each file with a syntax check + live preview load as it was written, same discipline as prior chapters.
+
+**1. `public/js/ec-chair.js` — Dashboard phase transitions.**
+Replaced the static "phase controls added later" note with a real phase pipeline (`.ec-phase-pipeline` steps, done/active/upcoming states) and an "Advance to {next phase}" button. Advances Nominations → Campaigning → Voting → Counting directly from the Dashboard. **Counting → Published is deliberately NOT here** — it requires the tie check, so that transition lives on the Results tab's Publish button instead (matches plan §6.3/§6.5 exactly: Dashboard owns the first four transitions, Results owns the last one).
+
+**Bug caught and fixed before it shipped:** `window.shOnTab`'s lazy-tab-loading used a `loaded` Set to load each tab only once per page load. That's fine for Nominations (which self-refreshes after actions) but wrong for **Results and Dashboard**, whose entire content depends on the cycle's *current phase* — a real workflow is: EC Chair opens Results during Voting (sees "not ready"), later advances phase from the Dashboard, returns to Results expecting live counts, and would have seen the stale "not ready" message forever because `tab-results` was already marked `loaded`. Fixed by removing the once-only guard for `tab-dash`/`tab-nom`/`tab-results` (all reload every visit now); kept it for `tab-overview` only, since that tab has no live logic yet (Slice 4).
+
+**2. `public/student.html` + `public/js/nav.js` — Elections tab scaffold.**
+Added `#tab-election` panel (skeleton loader + content div, per Flag 6 — all real UI built dynamically by JS, matching how Dashboard/History are already built) and an `.elec-*` CSS block (position sub-tabs, contestant cards, committee multi-select grid, confirm panel) directly in `student.html`'s existing `<style>` block. Added the "Elections" tab to `studentTabs()` in `nav.js`, reusing the existing `check` icon (no new SVG, per Flag 3).
+
+**3. `public/js/student.js` — full ballot logic (`initElection()` and friends).**
+- Gating priority, in order: no active cycle → closed. Not paid-up & `!allowAllStudents` → pay message (applies even during Campaigning — a deliberate reading of plan §5.2, since only paid/allowed students should preview or draft a ballot at all). `phase === "nominations"` → "candidate list coming soon." Revote active for a position → checks `voterTurnout.revotes[position]` first (so a revote takes priority over the "already voted" gate — lets a student who voted in the main round back in for just that one position). Otherwise, `voterTurnout.mainRound` exists → locked "already voted." Else render the full ballot for Campaigning (draft-only, submit disabled) or Voting (submit enabled).
+- Position sub-tabs render from a local `BALLOT_POSITIONS` array (same 8 as `ec-chair.js`, no shared constants module — consistent with the rest of this codebase). Committee Member gets its own multi-select panel with a live "(x/N selected)" counter, `N = min(3, candidateCount)` per the plan's adaptive-UI edge case, and a manual cap so a 4th checkbox can't be selected.
+- Selections are held in a module-level `_selections` object and **fully re-rendered on every click** (select a candidate, toggle a committee member, press Done) rather than doing fine-grained DOM patches — simpler to keep correct, and cheap given contestant counts are small. The currently active tab is preserved across re-renders via `_activePosition` so clicking doesn't bounce the student back to the first tab.
+- **Campaigning phase:** pressing "Done" on a tab persists the whole `_selections` object to `draftSelections/{uid}` (best-effort — a retry is just pressing Done again). Submit button stays disabled with the exact tooltip text from the plan.
+- **Voting/Revote phase:** draft selections are pre-loaded (Voting only — Revote always starts blank per plan §5.8) and the student can change them before final submit.
+- **Submit:** writes one `votes` doc per selection (3 separate docs for Committee Members), a `voterTurnout/{uid}` doc (merge, so `revotes.{position}` doesn't clobber a prior revote entry for a different position — Firestore's `setDoc(..., {merge:true})` deep-merges nested maps, confirmed this is safe before relying on it), generates and shows an 8-character receipt token (not linked to choices, per plan), and deletes `draftSelections` on a **main-round** submit only (revote submits don't touch it, since campaigning/voting for other positions isn't happening again).
+
+**4. `public/js/ec-chair.js` — Results tab (aggregation, tie detection, revote, publish).**
+- `loadResults()` shows a "come back after Counting" message during Nominations/Campaigning/Voting, then aggregates client-side (Flag 15 — no Cloud Function for v1) by reading all `votes` for the cycle plus all `status:"approved"` `contestants`.
+- `computePositionResults()` counts main-round votes per contestant; if a position has ANY `round:"revote"` votes recorded, those fully replace the main-round counts for that position only (so a closed revote's result is authoritative, matching plan §6.5's revote flow — "previous main-round votes remain in `votes` for audit but are ignored in the final result"). Tie detection: for single-seat positions, top-2 counts equal; for Committee Member (3 seats), 3rd/4th place counts equal.
+- **Known, deliberate scope gap flagged in a code comment:** votes for a **disqualified** contestant are excluded from counting (since `computePositionResults` only receives `status:"approved"` contestants) — this is intentional, disqualification is an EC-integrity action. But the plan's edge-case table also describes a separate **"withdrawn"** status whose votes *should* still count (a voluntary withdrawal, different from EC-initiated disqualification) — that status and its UI action were never built (Nominations tab only has a Disqualify button, no Withdraw). Flagged explicitly in the code so a future slice doesn't assume "withdraw" already works.
+- Bar chart rendering reuses the `.ec-bar-*` CSS written in Slice 1 (Flag 16 — no chart library).
+- **"Call Revote for {position}"** appears on every position (not just tied ones, per the Q10 decision — manual revote allowed with a required reason, min 10 characters, stored in `electionCycles.revote.reason`). **"Close Revote"** appears in place of it once active. Both call `loadResults()` again afterward to re-render immediately.
+- **Publish** button is disabled if any position has an unresolved tie, or if already published. On click: confirms, sets `phase: "published"` + `publishedAt`.
+- Every aggregation run also does a best-effort write to `electionStats/{cycleId}` (doc ID **must equal** the cycle ID — enforced by using `_cycle.id` directly, not an auto-generated ID) so the public page never needs to touch the anonymity-protected `votes` collection.
+
+**5. `firestore.rules` — fixed a gap caught before it shipped.**
+`electionStats` had no public-read path at all — only `isECChair()||isAdmin()`. Since the public results page is required to read exactly this collection (not raw `votes`, which must stay private for ballot secrecy), this would have silently 403'd the public page the moment Slice 3 tried to use it. Fixed the same way as `contestants`/`electionCycles` in Chapter 8: `get(.../electionCycles/$(id)).data.phase == 'published'`, relying on the doc-ID-equals-cycle-ID convention.
+
+**6. `public/election-results.html` + `public/js/election-results.js` — new public page.**
+Copied the `activities.html` boilerplate (nav/hero/footer/`init.js`+`chrome.js`) per Flag 21, and used `firebase-public.js` (not `firebase.js`) for the Firestore import — this is the existing lightweight public-page Firebase init that includes App Check, already used by `activities.js` (Flag 20 — must work unauthenticated). Queries `electionCycles` for `phase == "published"` (takes the most recently published one if there's ever more than one), then reads `contestants` (approved only) + `electionStats/{cycleId}` in parallel, and renders winner cards per position with photo/name/year/department/vote count/percentage/manifesto link — full vote counts are shown per the Q6 decision, not just winner names.
+
+**7. `public/js/chrome.js` — dynamic "Election Results" nav link (Flag 22).**
+Added a self-contained IIFE that only runs on pages with a `#navLinks` element, dynamically imports `firebase-public.js`, and runs a single `where("phase","==","published") limit(1)` query. If found, appends an "Election Results" link. **Deviation from the workflow doc's literal Flag 22 suggestion** (a single `getDoc` on a fixed `electionCycles/current` doc) — that assumes a fixed-ID convention this implementation doesn't use (cycles get auto-generated IDs, per plan §3.1's "auto-generated or timestamp-based"). A `where + limit(1)` query is the correct equivalent here; still one lightweight read per page load, so Flag 22's actual concern (query cost) is still satisfied.
+
+**Verification (this chapter):**
+- All five touched/new JS files (`ec-chair.js`, `student.js`, `election-results.js`, `chrome.js`) passed `node --input-type=module --check` (or `--check` for the non-module `chrome.js`).
+- `firestore.rules` re-verified via `firebase emulators:start --only firestore` reaching "ready" (compiles cleanly) after the `electionStats` fix.
+- Live in preview: `/ec-chair.html`, `/student.html` — unauthenticated redirect to `/login.html`, zero console errors. `/election-results.html` — loaded fully unauthenticated (as designed), no script errors; displayed "Could not load results: Missing or insufficient permissions." which is the **expected, gracefully-handled** result of the pre-existing App Check throttling issue (now escalated to a 24h throttle in this dev session from repeated testing — documented in `APPCHECK-RECOVERY-GUIDE.md`, not caused by this session's code). Confirmed the try/catch degrades to a message instead of a crash. `/index.html` — nav-link injection IIFE runs silently with no console errors (its own try/catch swallows the same App Check failure).
+- **Not verified live:** the full authenticated ballot flow (submit as student, advance phases as EC Chair, call/close a revote, publish, see it on the public page) — blocked by the same App Check throttle for the rest of this session, and even without that, needs real login sessions this tool doesn't have. This is the largest untested surface of the whole build so far and should be the top priority for the user's next live testing pass, once App Check's throttle window clears (~24h per the console warning) or the recovery guide's fix is applied.
+
+**Next:** User to live-test Slice 3 once App Check's throttle clears — full cycle: Nominations → Campaigning → Voting → Counting → (tie/revote if any) → Published, plus the public results page. Slice 4 (polish: FCM exec-only push, email vote receipt requiring an external Worker update, Overview tab's real student stats + "allow all students" OTP toggle, Excel archive export) remains after that.
+
+---
+
+## Chapter 15 — Slice 4 begins: Overview tab (student stats + Allow-All OTP toggle)
+
+**File changed:** `firestore.rules` — the `settings/{id}` match block was `allow write: if isAdmin();` unconditionally, which would have blocked the EC Chair from ever writing the OTP doc needed for this feature. Fixed to carve out `ecOtp` specifically: `allow write: if id == 'ecOtp' ? (isECChair() || isAdmin()) : isAdmin();`, and correspondingly widened read for that one doc ID. Kept `sysOtp` (Admin's own System-tab unlock) untouched and still admin-only, per Flag 25 — the two OTP flows use separate settings docs so an admin and the EC Chair can each have a live pending code without colliding.
+
+**File changed:** `public/js/ec-chair.js` — implemented the Overview tab in full:
+- **Student stats:** total student count + department breakdown (from a one-time `students` collection read), paid-up member count + year-of-study breakdown (cross-referencing confirmed `Membership Dues` payments by `studentUid`). `DEPARTMENTS`/`YEAR_OPTIONS` are local copies, not imported from `admin.js` — `admin.js` calls `protect(["admin"], ...)` at module load time and expects admin-only DOM elements, so importing it into `ec-chair.js` would run that side effect against the wrong page's DOM (same reasoning as Flag 13's "no cross-import from executive.js").
+- **"Allow all students to vote" toggle:** turning it OFF is immediate (with a confirm dialog); turning it ON opens an OTP modal (built dynamically, same pattern as the Add-Contestant modal). `findOtpRecipient()` looks for an active executive with `position == "Chairperson"` first, falling back to any `role == "admin"` executive if none is found with an email on file — implements the OTP-fallback decision from the original planning conversation exactly (§3.7 of the workflow doc). The OTP itself mirrors `admin.js`'s `sysOtp` pattern (`sha256Hex`, 10-minute expiry, one-time use) but writes to `settings/ecOtp` and tracks `requestedBy` (the EC Chair's uid) instead of the recipient's uid, since the person entering the code isn't the person who received the email here.
+- Wired into the existing `tab-overview` HTML scaffold from Slice 1 (`#ecOverviewStats`, `#allowAllToggle`, `#allowAllStatusText`, `#allowAllMsg`) — no HTML changes needed, that markup was already in place.
+
+**Verification:** `ec-chair.js` syntax-checked (`node --check`), `firestore.rules` re-verified via emulator startup (compiles cleanly after the `settings` rule change), live preview redirect-only check (no login available) shows zero console errors.
+
+**Next:** Continue Slice 4 — contestant edit-after-Campaigning-starts with `editHistory` (Q2 decision), Excel archive export (upgrading Slice 1's soft-only archive), FCM push on phase change (exec-only v1, Q3 decision), and the email vote receipt (client-side call only — needs an external Cloudflare Worker update to actually send, flagged as a deployment dependency per Flag 24).
+
+---
+
+## Chapter 16 — Slice 4: Contestant edit + editHistory (Q2)
+
+**Files changed:** `public/js/ec-chair.js`, `public/js/student.js`.
+
+- **`ec-chair.js`:** Added an always-visible "Edit" button to every roster card (not gated by phase — plan §3.2 allows editing any time, logged either way). Opens a new modal (`ecEditContestantModal`, separate from the Add-Contestant modal since the data model differs — payment vs. existing contestant) pre-filled with the current position/manifesto; photo replacement is optional. Reuses the same live 4th-Year/graduating warning banner logic as Add-Contestant. On save, only the fields that actually changed get written, each pushed into an `editHistory` array via `arrayUnion` with `{field, oldValue, newValue, editedAt, editedBy}` — `editedAt` is a plain client `Date().toISOString()` string, not `serverTimestamp()`, because **Firestore rejects the `serverTimestamp()` sentinel inside array elements** (only allowed as a top-level/nested map field) — caught this before it could throw a runtime error on first use. Also stamps a top-level `updatedAt: serverTimestamp()` on the contestant doc.
+- **`student.js`:** Added `wasRecentlyUpdated(c)` — compares `createdAt`/`updatedAt` seconds, flags only if the edit happened more than 5 minutes after creation (plan §3.2's exact threshold, so an edit made moments into initial setup doesn't confusingly show "Updated" to students). Both the single-select and Committee Member contestant cards now show "· Updated" in the meta line when true.
+
+**Verification:** Both files syntax-checked (`node --check`), live preview redirect-only check on `/ec-chair.html` — zero console errors. The `arrayUnion`-with-`serverTimestamp()` incompatibility was caught by reasoning through Firestore's documented sentinel-value restrictions during writing, not by a failed test run (no live authenticated session available to actually trigger the write and confirm) — worth double-checking on the first real edit during live testing.
+
+**Next:** Excel archive export (upgrade Slice 1's soft-only archive in `admin.js` to produce a real `.xlsx`, reusing the existing `buildArchiveWorkbook`-style pattern and the `XLSX` global already loaded on `admin.html`), then FCM push on phase change (exec-only v1) and the email vote receipt (external Worker dependency, Flag 24).
+
+---
+
+## Chapter 17 — Slice 4: Excel archive export
+
+**File changed:** `public/js/admin.js`. Upgraded the Slice 1 "soft archive only" placeholder (Chapter 9) to a real export, mirroring the existing `buildArchiveWorkbook()` pattern used by the year-end financial reset (same `window.XLSX` global already loaded on `admin.html` — Flag 4, no second import).
+
+- `buildElectionArchiveWorkbook(cycle, contestants, ecPayments, positionResults)` — 4 sheets: Summary (cycle name, counts), Contestants (position/name/comp#/dept/year/status/manifesto), EC Payments (fee submissions with status), Results (per-position, per-contestant vote counts with a Winner column, sourced from `electionStats.positionResults` written by the Results tab).
+- Archive button handler now: loads `contestants` + `ecPayments` (both `where cycleId==`) + `electionStats/{cycleId}` in parallel → builds the workbook → uploads to Cloudflare via the existing `uploadArchive()` helper → writes an `electionArchives/{cycleId}` doc (summary + `archiveUrl`) → **then** does the same soft `status:"archived"` flip as before. Explicitly does **not** delete `contestants`/`ecPayments`/`votes` — this must never behave like the year-end financial reset, which does delete records and proof files (Flag 5, re-confirmed here since this was the exact risk the plan called out).
+
+**Verification:** `admin.js` syntax-checked (`node --check`), live preview redirect-only check on `/admin.html` — zero console errors. Not verified against a real cycle with data (needs a login session + an actual published cycle to archive) — the workbook-building logic was reviewed by hand against the `electionStats.positionResults` shape written in Chapter 14 to make sure field names line up (`r.contestants`, `r.winner` as array-or-string) before trusting it.
+
+**Next:** FCM push on phase change (exec-only broadcast for v1, per the Q3 decision — not a mass student broadcast, which risks Worker rate limits per Flag 23) and the email vote receipt (client-side call only; needs an external Cloudflare Worker update to actually deliver, flagged as a deployment dependency per Flag 24 — cannot be fully implemented or tested from this repo alone).
+
+---
+
+## Chapter 18 — Slice 4: FCM push on phase change (exec-only v1)
+
+**Discovered gap:** `fcm.js`'s `registerFCMToken()` was only ever called from `student.js`. Executive/EC Chair/Admin accounts never registered a device token, so sending them a push would silently do nothing — the feature would look "built" but never actually fire. Fixed by adding the same one-line `registerFCMToken(user.uid, profile.__collection || "executives")` call to `executive.js`, `admin.js`, and `ec-chair.js`'s bootstraps (mirroring `student.js`'s existing call exactly).
+
+**File changed:** `public/js/ec-chair.js` — after a successful phase advance (Dashboard's "Advance to {phase}" button), calls `notifyExecsOfPhaseChange(next)`: queries all `active == true` executives, and for each with an `fcmToken` on file, sends a push via the existing `sendPush()` from `fcm.js` (already-deployed `/push` Worker endpoint — **not** a new external dependency, unlike the email receipt below). Deliberately **not** a mass broadcast to students, per the Q3/Flag 23 decision (500 individual Worker calls in a loop was explicitly flagged as a v2 concern) — only active executives get notified.
+
+**Files changed:** `public/js/executive.js`, `public/js/admin.js` — added `registerFCMToken` import + bootstrap call, each with a one-line comment explaining why (so a future session doesn't wonder why exec accounts suddenly register push tokens).
+
+**Verification:** All three files syntax-checked (`node --check`), live preview redirect-only check on `/executive.html` — zero console errors. **Not verified**: actual push delivery, which requires a real device/browser with notification permission granted and a live phase-advance action — neither is available in this tool session.
+
+---
+
+## Chapter 19 — Slice 4: Email vote receipt (external dependency, Flag 24)
+
+**File changed:** `public/js/student.js` — after a **main-round** vote submit succeeds (not revote — the plan's receipt design is for the main round only), fires `sendVoteReceiptEmail(receiptToken, positionsToSubmit)`: a best-effort `POST` to the existing `UPLOAD_WORKER_URL + "/email"` endpoint with a **new** `type: "vote_receipt"`, matching the exact call pattern already used elsewhere (`admin.js`'s OTP email, `industrial-secretary.js`'s letter emails) — including `authHeaders()`, which I initially forgot and then added after checking that every other `/email` call site in this codebase includes it.
+
+**This is a genuine, unavoidable external dependency (Flag 24) — flagged explicitly in a code comment, not just here:** the Cloudflare Worker that backs `/email` lives **outside this repository** and does not currently have a handler for `type: "vote_receipt"`. Until someone with Worker access adds that handler (reading `to`/`receiptToken`/`positions` from the request body and sending an email via whatever provider the Worker uses for the other email types), this call will silently fail — which is fine, because it's wrapped in try/catch and never blocks the vote confirmation UI (the vote is already recorded in Firestore before this fires). **This cannot be completed or tested from this repo alone.**
+
+**Verification:** `student.js` syntax-checked (`node --check`), live preview check — zero console errors. Actual delivery is untestable without Worker-side access, which this session doesn't have.
+
+---
+
+## Slice 4 status: essentially complete
+
+All of Slice 4's planned items are now built:
+- ✅ Overview tab — real student/department/year stats, "Allow all students to vote" OTP toggle with Chairperson→Admin fallback (Chapter 15)
+- ✅ Contestant edit with `editHistory` + student-facing "Updated" label (Chapter 16)
+- ✅ Excel archive export, uploaded to Cloudflare, `electionArchives` doc, original data preserved (Chapter 17)
+- ✅ FCM push on phase change, exec-only v1 (Chapter 18)
+- ⚠️ Email vote receipt — client-side implemented, but **cannot function until the external Worker is updated** (Chapter 19) — this is a hard external blocker, not a bug in this repo
+
+**What remains untested end-to-end across the whole build:** the full authenticated flow (student votes, EC Chair approves/adds contestants/advances phases/calls revotes/publishes, admin creates/archives cycles) has never been exercised live in this tool session beyond the Slice 1/2 confirmations the user already ran locally. The App Check throttle (Chapter 13/14) blocked further live testing from this side for most of Slices 3–4. **Recommended next step:** a full live walkthrough of one complete election cycle, ideally once the App Check throttle clears or its underlying issue is fixed (see `APPCHECK-RECOVERY-GUIDE.md`).
+
+**Next:** Await user decision — live-test the full build, or commit/push/deploy first and test against production.

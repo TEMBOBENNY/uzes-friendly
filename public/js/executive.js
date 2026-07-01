@@ -11,7 +11,7 @@ import {
   reauthenticateWithCredential, EmailAuthProvider, updatePassword
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { ORG, UPLOAD_WORKER_URL } from "./config.js";
-import { sendPush } from "./fcm.js";
+import { sendPush, registerFCMToken } from "./fcm.js";
 
 async function getTrialMode() {
   try {
@@ -75,6 +75,9 @@ let isActivitiesMgr = false; // Info & Publicity, Social & Cultural, or Admin
 
 protect(["executive", "admin"], (user, profile) => {
   currentUser = user; currentProfile = profile;
+  // Registers this device for push so EC phase-change notices (exec-only v1,
+  // see ec-chair.js) can actually reach someone — students already do this.
+  registerFCMToken(user.uid, profile.__collection || "executives").catch(() => {});
   // Redirect Industrial Training Secretary to their own page
   if (profile.role === "executive" && profile.position === "Industrial Training Secretary") {
     location.replace("industrial-secretary.html"); return;

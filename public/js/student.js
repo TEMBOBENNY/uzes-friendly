@@ -1,19 +1,24 @@
 import { auth, db } from "./firebase.js";
 import { protect } from "./guard.js";
 import {
-  collection, doc, addDoc, getDocs, getDoc, updateDoc, onSnapshot, query,
+  collection, doc, addDoc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query,
   where, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { uploadProof } from "./upload.js";
+import { uploadProof, authHeaders } from "./upload.js";
 import { initSubHero } from "./subhero.js?v=4";
 import { studentTabs } from "./nav.js?v=2";
 import { initLibrary } from "./library.js?v=12";
 import { initAttachment } from "./attachment.js?v=2";
 import { initPlacement } from "./placement.js?v=2";
 import { registerFCMToken } from "./fcm.js";
+import { UPLOAD_WORKER_URL } from "./config.js";
 
 const METHODS = ["Airtel Money", "MTN Money", "Zamtel Money", "Zed Mobile", "Cash"];
 const CATEGORIES = ["Membership Dues", "Event Fee", "Fine", "Subscription", "Other"];
+// 5th Year/Graduate students are ineligible to contest (constitution Art. 9) so the
+// EC Nomination Fee option never appears for them — no shared constants.js exists
+// in this codebase, so this stays a local inline check (each page keeps its own copy).
+const EC_INELIGIBLE_YEARS = ["5th Year", "Graduate"];
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const payForm     = document.getElementById("payForm");
@@ -41,8 +46,8 @@ protect(["student"], (user, profile) => {
   currentUser = user; currentProfile = profile;
   registerFCMToken(user.uid, "students").catch(() => {});
 
-  // Lazy-init library, attachment, and placement on first tab open
-  let libInited = false, attInited = false, placeInited = false;
+  // Lazy-init library, attachment, placement, and elections on first tab open
+  let libInited = false, attInited = false, placeInited = false, electionInited = false;
   window.shOnTab = async (id) => {
     if (id === "tab-lib" && !libInited) {
       libInited = true;
@@ -64,6 +69,14 @@ protect(["student"], (user, profile) => {
       catch (e) {
         const el = document.getElementById("tab-placement");
         if (el) el.innerHTML = `<p class="error">Placement failed to load: ${e.message}</p>`;
+      }
+    } else if (id === "tab-election" && !electionInited) {
+      electionInited = true;
+      try { await initElection(currentUser, currentProfile); }
+      catch (e) {
+        const el = document.getElementById("electionContent");
+        document.getElementById("electionLoading").style.display = "none";
+        if (el) { el.style.display = ""; el.innerHTML = `<p class="error">Elections failed to load: ${e.message}</p>`; }
       }
     }
   };
@@ -294,10 +307,46 @@ function initFinTabs() {
 }
 
 // ── Selects ───────────────────────────────────────────────────────────────────
+// Cached so the submit handler knows which cycle an EC fee belongs to without a
+// second query — refreshed each time buildCategorySelect() runs.
+let _activeElectionCycle = null;
+
+async function checkElectionNominationEligibility() {
+  if (EC_INELIGIBLE_YEARS.includes(currentProfile.yearOfStudy)) return false;
+
+  try {
+    const cycleSnap = await getDocs(query(
+      collection(db, "electionCycles"),
+      where("status", "==", "active")
+    ));
+    if (cycleSnap.empty) { _activeElectionCycle = null; return false; }
+    _activeElectionCycle = { id: cycleSnap.docs[0].id, ...cycleSnap.docs[0].data() };
+    // Fees are only accepted while nominations are open — once campaigning starts
+    // there is no point letting students submit a fee that can no longer be approved.
+    if (_activeElectionCycle.phase !== "nominations") return false;
+  } catch (_) { return false; }
+
+  try {
+    const paidSnap = await getDocs(query(
+      collection(db, "payments"),
+      where("studentUid", "==", currentUser.uid),
+      where("category", "==", "Membership Dues"),
+      where("status", "==", "confirmed")
+    ));
+    return !paidSnap.empty;
+  } catch (_) { return false; }
+}
+
+async function buildCategorySelect() {
+  const canNominate = await checkElectionNominationEligibility();
+  const cats = canNominate ? [...CATEGORIES, "EC Nomination Fee"] : CATEGORIES;
+  document.getElementById("category").innerHTML =
+    cats.map(c => `<option value="${c}">${c}</option>`).join("");
+}
+
 function buildSelects() {
   methodSel.innerHTML = METHODS.map(m => `<option value="${m}">${m}</option>`).join("");
-  document.getElementById("category").innerHTML =
-    CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
+  buildCategorySelect();
   updateRefRow();
 }
 
@@ -347,21 +396,40 @@ payForm.addEventListener("submit", async (e) => {
     }
 
     submitBtn.textContent = "Saving…";
-    await addDoc(collection(db, "payments"), {
-      studentUid:    currentUser.uid,
-      studentName:   currentProfile.name || "",
-      compNumber:    currentProfile.compNumber || "",
-      studentEmail:  currentUser.email,
-      amount,
-      amountInWords: toWords(amount),
-      category,
-      method,
-      txRef:         txRef || "",
-      notes,
-      proofUrl,
-      status:        "pending",
-      submittedAt:   serverTimestamp()
-    });
+    if (category === "EC Nomination Fee") {
+      if (!_activeElectionCycle) throw new Error("No active election cycle — refresh the page and try again.");
+      await addDoc(collection(db, "ecPayments"), {
+        cycleId:      _activeElectionCycle.id,
+        studentUid:   currentUser.uid,
+        studentName:  currentProfile.name || "",
+        compNumber:   currentProfile.compNumber || "",
+        department:   currentProfile.department || currentProfile.school || "",
+        yearOfStudy:  currentProfile.yearOfStudy || "",
+        amount,
+        method,
+        txRef:        txRef || "",
+        notes,
+        proofUrl,
+        status:       "pending",
+        submittedAt:  serverTimestamp()
+      });
+    } else {
+      await addDoc(collection(db, "payments"), {
+        studentUid:    currentUser.uid,
+        studentName:   currentProfile.name || "",
+        compNumber:    currentProfile.compNumber || "",
+        studentEmail:  currentUser.email,
+        amount,
+        amountInWords: toWords(amount),
+        category,
+        method,
+        txRef:         txRef || "",
+        notes,
+        proofUrl,
+        status:        "pending",
+        submittedAt:   serverTimestamp()
+      });
+    }
 
     payForm.reset();
     proofLabel.textContent = "Choose file…";
@@ -371,6 +439,7 @@ payForm.addEventListener("submit", async (e) => {
     }
     loadHistory();
     loadMembership();
+    buildCategorySelect();
   } catch (err) {
     formErr.textContent = err.message;
   } finally {
@@ -463,6 +532,388 @@ function renderHistoryList(payments) {
       </div>
     </div>`;
   }).join("");
+}
+
+// ── Elections ─────────────────────────────────────────────────────────────────
+// Ballot positions (Constitution Art. 7) — same 8 as ec-chair.js's BALLOT_POSITIONS.
+// No shared constants.js exists in this codebase, so each page keeps its own copy.
+const BALLOT_POSITIONS = [
+  "Chairperson", "Vice Chairperson", "Secretary General", "Vice Secretary General",
+  "Treasurer", "Information and Publicity Secretary",
+  "Social and Cultural Secretary", "Committee Member"
+];
+
+let _electionCycle = null;
+let _electionContestants = [];
+let _voterTurnout = null;
+let _selections = {};
+let _doneTabs = new Set();
+let _activePosition = null;
+let _currentMode = null;          // "campaigning" | "voting" | "revote"
+let _currentRevotePosition = null;
+
+function slug(s) { return String(s).replace(/[^a-z0-9]+/gi, "-").toLowerCase(); }
+
+async function initElection(user, profile) {
+  document.getElementById("electionLoading").style.display = "";
+  document.getElementById("electionContent").style.display = "none";
+
+  await loadElectionCycle();
+  if (!_electionCycle) return showElectionGate("Elections are currently closed.");
+
+  const paidUp = await isPaidUpMember(user);
+  if (!paidUp && !_electionCycle.allowAllStudents) {
+    return showElectionGate("Pay your membership dues to vote.");
+  }
+
+  if (_electionCycle.phase === "nominations") {
+    return showElectionGate("Nominations are open. The candidate list will be available soon.");
+  }
+
+  await Promise.all([loadContestants(), loadVoterTurnout(user)]);
+
+  const revote = _electionCycle.revote;
+  if (revote?.active) {
+    const alreadyRevoted = !!_voterTurnout?.revotes?.[revote.position];
+    if (alreadyRevoted) {
+      return showElectionGate(`You have already voted in the revote for ${revote.position}. Thank you for participating.`);
+    }
+    await loadSelectionsForMode("revote");
+    return renderBallot({ mode: "revote", revotePosition: revote.position });
+  }
+
+  if (_voterTurnout?.mainRound) {
+    return showElectionGate("You have already voted. Thank you for participating.");
+  }
+
+  if (_electionCycle.phase === "campaigning") {
+    await loadSelectionsForMode("campaigning");
+    return renderBallot({ mode: "campaigning" });
+  }
+
+  if (_electionCycle.phase === "voting") {
+    await loadSelectionsForMode("voting");
+    return renderBallot({ mode: "voting" });
+  }
+
+  // counting / published, no revote, never voted — nothing left to do
+  return showElectionGate("Voting has closed for this election.");
+}
+
+async function isPaidUpMember(user) {
+  try {
+    const snap = await getDocs(query(
+      collection(db, "payments"),
+      where("studentUid", "==", user.uid),
+      where("category", "==", "Membership Dues"),
+      where("status", "==", "confirmed")
+    ));
+    return !snap.empty;
+  } catch (_) { return false; }
+}
+
+async function loadElectionCycle() {
+  try {
+    const snap = await getDocs(query(collection(db, "electionCycles"), where("status", "==", "active")));
+    _electionCycle = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+  } catch (_) { _electionCycle = null; }
+}
+
+async function loadContestants() {
+  try {
+    const snap = await getDocs(query(
+      collection(db, "contestants"),
+      where("cycleId", "==", _electionCycle.id),
+      where("status", "==", "approved")
+    ));
+    _electionContestants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (_) { _electionContestants = []; }
+}
+
+async function loadVoterTurnout(user) {
+  try {
+    const snap = await getDoc(doc(db, "voterTurnout", user.uid));
+    _voterTurnout = snap.exists() ? snap.data() : null;
+  } catch (_) { _voterTurnout = null; }
+}
+
+// Campaigning and Voting both pre-load draftSelections (Voting lets the student
+// edit them before final submit); Revote always starts blank for that one position.
+async function loadSelectionsForMode(mode) {
+  if (mode === "revote") { _selections = {}; _doneTabs = new Set(); return; }
+  try {
+    const snap = await getDoc(doc(db, "draftSelections", currentUser.uid));
+    const draft = snap.exists() ? snap.data() : null;
+    _selections = draft?.selections ? { ...draft.selections } : {};
+  } catch (_) { _selections = {}; }
+  _doneTabs = new Set(Object.keys(_selections));
+}
+
+function showElectionGate(message) {
+  document.getElementById("electionLoading").style.display = "none";
+  const contentEl = document.getElementById("electionContent");
+  contentEl.style.display = "";
+  contentEl.innerHTML = `<div class="elec-locked-msg"><p>${esc(message)}</p></div>`;
+}
+
+function renderBallot({ mode, revotePosition }) {
+  _currentMode = mode;
+  _currentRevotePosition = revotePosition || null;
+  if (!_activePosition || (mode === "revote" && _activePosition !== revotePosition)) {
+    _activePosition = mode === "revote" ? revotePosition : BALLOT_POSITIONS[0];
+  }
+
+  document.getElementById("electionLoading").style.display = "none";
+  const contentEl = document.getElementById("electionContent");
+  contentEl.style.display = "";
+
+  const tabsHtml = BALLOT_POSITIONS.map(pos => {
+    const locked = mode === "revote" && pos !== revotePosition;
+    const hasCandidates = _electionContestants.some(c => c.position === pos);
+    if (!hasCandidates && !locked) return ""; // skip positions with no contestants at all
+    const activeClass = pos === _activePosition ? " active" : "";
+    const doneClass = (!locked && _doneTabs.has(pos)) ? " done" : "";
+    return `<button class="elec-postab${activeClass}${doneClass}" data-elec-pos="${pos}" ${locked ? "disabled" : ""}>${esc(pos)}</button>`;
+  }).join("");
+
+  const panelsHtml = BALLOT_POSITIONS.map(pos => {
+    const locked = mode === "revote" && pos !== revotePosition;
+    const hasCandidates = _electionContestants.some(c => c.position === pos);
+    if (!hasCandidates && !locked) return "";
+    const hiddenClass = pos === _activePosition ? "" : " hidden";
+    return `<div class="elec-pospanel${hiddenClass}" id="elecpanel-${slug(pos)}">${locked ? renderLockedPanel() : renderPositionPanel(pos)}</div>`;
+  }).join("");
+
+  contentEl.innerHTML = `
+    <div class="elec-postabs">${tabsHtml}</div>
+    ${panelsHtml}
+    <div id="elecConfirmPanel"></div>`;
+
+  wireBallotTabs();
+  renderConfirmPanel();
+}
+
+function renderLockedPanel() {
+  return `<div class="elec-locked-msg"><p>Already voted.</p></div>`;
+}
+
+// Plan §3.2 — only flag as "Updated" once the edit is well after creation, so a
+// contestant edited moments after being added (still mid-setup) isn't flagged.
+function wasRecentlyUpdated(c) {
+  const created = c.createdAt?.seconds ?? c.createdAt?.toDate?.()?.getTime() / 1000;
+  const updated = c.updatedAt?.seconds ?? c.updatedAt?.toDate?.()?.getTime() / 1000;
+  if (!created || !updated) return false;
+  return updated > created + 5 * 60;
+}
+
+function renderPositionPanel(pos) {
+  const candidates = _electionContestants.filter(c => c.position === pos);
+  if (pos === "Committee Member") return renderCommitteePanel(candidates);
+
+  const selected = _selections[pos];
+  const cardsHtml = candidates.map(c => `
+    <div class="contestant-card${selected === c.id ? " selected" : ""}" data-elec-select="${pos}" data-cid="${c.id}">
+      <img class="contestant-photo" src="${esc(c.photoUrl || "")}" alt="${esc(c.studentName)}" onerror="this.style.visibility='hidden'">
+      <div class="contestant-name">${esc(c.studentName)}</div>
+      <div class="contestant-meta">${esc(c.compNumber)} · ${esc(c.department)}${wasRecentlyUpdated(c) ? " · Updated" : ""}</div>
+      ${c.manifestoUrl ? `<div class="contestant-select"><a href="${esc(c.manifestoUrl)}" target="_blank" rel="noopener" class="btn-ghost" style="font-size:11px;padding:5px 10px;text-decoration:none;display:inline-block" onclick="event.stopPropagation()">View Manifesto</a></div>` : ""}
+      <div class="contestant-select">${selected === c.id ? "● Selected" : "○ Select"}</div>
+    </div>`).join("");
+
+  return `
+    <div class="contestant-grid">${cardsHtml}</div>
+    <button class="btn-primary elec-done-btn" data-elec-done="${pos}" ${selected ? "" : "disabled"}>Done</button>`;
+}
+
+function renderCommitteePanel(candidates) {
+  const max = Math.min(3, candidates.length);
+  const selectedArr = Array.isArray(_selections["Committee Member"]) ? _selections["Committee Member"] : [];
+  const cardsHtml = candidates.map(c => {
+    const checked = selectedArr.includes(c.id);
+    return `<div class="contestant-card${checked ? " selected" : ""}" data-elec-committee-toggle="${c.id}">
+      <img class="contestant-photo" src="${esc(c.photoUrl || "")}" alt="${esc(c.studentName)}" onerror="this.style.visibility='hidden'">
+      <div class="contestant-name">${esc(c.studentName)}</div>
+      <div class="contestant-meta">${esc(c.compNumber)} · ${esc(c.department)}${wasRecentlyUpdated(c) ? " · Updated" : ""}</div>
+      ${c.manifestoUrl ? `<div class="contestant-select"><a href="${esc(c.manifestoUrl)}" target="_blank" rel="noopener" class="btn-ghost" style="font-size:11px;padding:5px 10px;text-decoration:none;display:inline-block" onclick="event.stopPropagation()">View Manifesto</a></div>` : ""}
+      <div class="contestant-select">${checked ? "☑ Selected" : "☐ Select"}</div>
+    </div>`;
+  }).join("");
+
+  return `
+    <p style="font-weight:600;font-size:13px;margin-bottom:10px">Committee Members (${selectedArr.length}/${max} selected)</p>
+    <div class="contestant-grid">${cardsHtml}</div>
+    <p id="elecCommitteeErr" class="error" style="min-height:16px"></p>
+    <button class="btn-primary elec-done-btn" data-elec-done="Committee Member" ${selectedArr.length === max ? "" : "disabled"}>Done</button>`;
+}
+
+function wireBallotTabs() {
+  const contentEl = document.getElementById("electionContent");
+
+  contentEl.querySelectorAll("[data-elec-pos]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (btn.disabled) return;
+      _activePosition = btn.dataset.elecPos;
+      contentEl.querySelectorAll("[data-elec-pos]").forEach(b => b.classList.toggle("active", b === btn));
+      contentEl.querySelectorAll(".elec-pospanel").forEach(p => p.classList.add("hidden"));
+      const panel = document.getElementById(`elecpanel-${slug(_activePosition)}`);
+      if (panel) panel.classList.remove("hidden");
+    });
+  });
+
+  contentEl.querySelectorAll("[data-elec-select]").forEach(card => {
+    card.addEventListener("click", () => {
+      _selections[card.dataset.elecSelect] = card.dataset.cid;
+      renderBallot({ mode: _currentMode, revotePosition: _currentRevotePosition });
+    });
+  });
+
+  contentEl.querySelectorAll("[data-elec-committee-toggle]").forEach(card => {
+    card.addEventListener("click", () => {
+      const cid = card.dataset.elecCommitteeToggle;
+      const candidates = _electionContestants.filter(c => c.position === "Committee Member");
+      const max = Math.min(3, candidates.length);
+      let arr = Array.isArray(_selections["Committee Member"]) ? [..._selections["Committee Member"]] : [];
+      if (arr.includes(cid)) {
+        arr = arr.filter(id => id !== cid);
+      } else if (arr.length >= max) {
+        const errEl = document.getElementById("elecCommitteeErr");
+        if (errEl) errEl.textContent = `You can only select ${max} candidate${max === 1 ? "" : "s"}.`;
+        return;
+      } else {
+        arr.push(cid);
+      }
+      _selections["Committee Member"] = arr;
+      renderBallot({ mode: _currentMode, revotePosition: _currentRevotePosition });
+    });
+  });
+
+  contentEl.querySelectorAll("[data-elec-done]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      _doneTabs.add(btn.dataset.elecDone);
+      await persistSelections();
+      renderBallot({ mode: _currentMode, revotePosition: _currentRevotePosition });
+    });
+  });
+}
+
+async function persistSelections() {
+  if (_currentMode !== "campaigning") return;
+  try {
+    await setDoc(doc(db, "draftSelections", currentUser.uid), {
+      cycleId: _electionCycle.id,
+      selections: _selections,
+      updatedAt: serverTimestamp()
+    });
+  } catch (_) { /* best-effort — student can re-press Done to retry */ }
+}
+
+function renderConfirmPanel() {
+  const panel = document.getElementById("elecConfirmPanel");
+  if (!panel) return;
+
+  const relevantPositions = BALLOT_POSITIONS.filter(pos => {
+    if (_currentMode === "revote") return pos === _currentRevotePosition;
+    return _electionContestants.some(c => c.position === pos);
+  });
+  const allDone = relevantPositions.every(pos => _doneTabs.has(pos));
+  if (!allDone || !relevantPositions.length) { panel.innerHTML = ""; return; }
+
+  const rows = relevantPositions.map(pos => {
+    const sel = _selections[pos];
+    const names = Array.isArray(sel)
+      ? sel.map(id => _electionContestants.find(c => c.id === id)?.studentName || "?").join(", ")
+      : (_electionContestants.find(c => c.id === sel)?.studentName || "—");
+    return `<div class="elec-confirm-row"><span>${esc(pos)}</span><span>${esc(names)}</span></div>`;
+  }).join("");
+
+  const submitEnabled = _currentMode === "voting" || _currentMode === "revote";
+  panel.innerHTML = `
+    <div class="elec-confirm-panel">
+      <p style="font-weight:700;margin-bottom:8px">Your Selections</p>
+      ${rows}
+      <button id="elecSubmitBtn" class="btn-primary" style="width:auto;padding:10px 24px;margin-top:14px" ${submitEnabled ? "" : "disabled"}>
+        Confirm Selection and Submit
+      </button>
+      ${!submitEnabled ? `<p class="muted small" style="margin-top:6px">Voting will open when the Electoral Commission activates it.</p>` : ""}
+      <p id="elecSubmitErr" class="error" style="margin-top:8px"></p>
+    </div>`;
+
+  if (submitEnabled) {
+    document.getElementById("elecSubmitBtn").addEventListener("click", submitBallot);
+  }
+}
+
+async function submitBallot() {
+  const btn = document.getElementById("elecSubmitBtn");
+  const errEl = document.getElementById("elecSubmitErr");
+  btn.disabled = true; btn.textContent = "Submitting…";
+  errEl.textContent = "";
+
+  try {
+    const round = _currentMode === "revote" ? "revote" : "main";
+    const positionsToSubmit = _currentMode === "revote"
+      ? [_currentRevotePosition]
+      : BALLOT_POSITIONS.filter(pos => _electionContestants.some(c => c.position === pos));
+
+    const writes = [];
+    for (const pos of positionsToSubmit) {
+      const sel = _selections[pos];
+      if (!sel) continue;
+      const ids = Array.isArray(sel) ? sel : [sel];
+      for (const cid of ids) {
+        writes.push(addDoc(collection(db, "votes"), {
+          cycleId: _electionCycle.id,
+          position: pos,
+          contestantId: cid,
+          round,
+          votedAt: serverTimestamp()
+        }));
+      }
+    }
+    await Promise.all(writes);
+
+    if (round === "revote") {
+      await setDoc(doc(db, "voterTurnout", currentUser.uid), {
+        cycleId: _electionCycle.id,
+        revotes: { [_currentRevotePosition]: { contestantId: _selections[_currentRevotePosition], votedAt: serverTimestamp() } }
+      }, { merge: true });
+      showElectionGate(`You have already voted in the revote for ${_currentRevotePosition}. Thank you for participating.`);
+    } else {
+      const receiptToken = Math.random().toString(36).slice(2, 10).toUpperCase();
+      await setDoc(doc(db, "voterTurnout", currentUser.uid), {
+        cycleId: _electionCycle.id,
+        mainRound: _selections,
+        receiptToken,
+        submittedAt: serverTimestamp()
+      }, { merge: true });
+      try { await deleteDoc(doc(db, "draftSelections", currentUser.uid)); } catch (_) {}
+      sendVoteReceiptEmail(receiptToken, positionsToSubmit); // best-effort, see note below
+      showElectionGate(`You have already voted. Thank you for participating. Receipt: ${receiptToken} (screenshot this — it does not reveal your choices, only that you voted).`);
+    }
+  } catch (err) {
+    errEl.textContent = "Submit failed: " + err.message;
+    btn.disabled = false; btn.textContent = "Confirm Selection and Submit";
+  }
+}
+
+// Fire-and-forget email receipt (Q4 decision). NOTE: this calls the existing
+// Worker /email endpoint with a NEW type, "vote_receipt", that the Worker does
+// not yet handle — the Worker source lives outside this repo (Flag 24) and must
+// be updated separately before this actually delivers anything. Failure here is
+// silent and never blocks the vote, which has already been recorded regardless.
+async function sendVoteReceiptEmail(receiptToken, positions) {
+  try {
+    await fetch(UPLOAD_WORKER_URL + "/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+      body: JSON.stringify({
+        type: "vote_receipt",
+        to: currentUser.email,
+        receiptToken,
+        positions,
+      })
+    });
+  } catch (_) { /* best-effort — the vote itself is already recorded */ }
 }
 
 function esc(s) {
